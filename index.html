@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: white;
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 2em;
+            margin-bottom: 0.5em;
+            padding-bottom: 0.3em;
+            border-bottom: 2px solid #eee;
+        }
+        
+        ul {
+            margin: 1em 0;
+            padding-left: 1.2em;
+            outline: none;
+        }
+        
+        ul:focus {
+            outline: none;
+        }
+        
+        li {
+            margin: 0.25em 0;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="date-header"></h1>
+    <ul contenteditable="true">
+        <li>First bullet point</li>
+        <li>Second bullet point</li>
+        <li>Third bullet point</li>
+    </ul>
+    
+    <script>
+        // Set today's date
+        const date = new Date();
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const day = date.getDate();
+        const year = date.getFullYear();
+        
+        // Add ordinal suffix to day
+        const ordinal = (d) => {
+            if (d > 3 && d < 21) return 'th';
+            switch (d % 10) {
+                case 1: return 'st';
+                case 2: return 'nd';
+                case 3: return 'rd';
+                default: return 'th';
+            }
+        };
+        
+        const today = `${month} ${day}${ordinal(day)}, ${year}`;
+        document.getElementById('date-header').textContent = today;
+    </script>
+</body>
+</html>
