@@ -1,4 +1,4 @@
-# PadTask
+# 📝 PadTask
 
 Daily notes with smarter tasks.
 
