@@ -97,32 +97,30 @@
 
         /* Hero Section */
         .hero {
-            padding: 80px 7% 60px;
-            background: white;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 60px;
-            align-items: center;
-            max-width: 1400px;
-            margin: 0 auto;
+            padding: 100px 7% 80px;
+            background: linear-gradient(to bottom, #f8f9fa 0%, white 100%);
+            text-align: center;
+            width: 100%;
         }
 
         .hero-content {
-            text-align: left;
+            max-width: 800px;
+            margin: 0 auto;
         }
 
         .hero h1 {
-            font-size: 3.5rem;
+            font-size: 3rem;
             font-weight: 700;
             color: #1a1a1a;
             margin-bottom: 1.25rem;
             line-height: 1.15;
+            white-space: nowrap;
         }
 
         .hero-subtitle {
             font-size: 1.25rem;
             color: #555;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
             line-height: 1.6;
         }
 
@@ -144,14 +142,125 @@
             box-shadow: 0 10px 25px rgba(49, 113, 239, 0.3);
         }
 
-        .hero-image {
+        /* Address Form */
+        .address-form-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .address-form {
+            display: flex;
+            gap: 0.75rem;
             width: 100%;
         }
 
-        .hero-image img {
+        .address-input {
+            flex: 1;
+            padding: 1.25rem 1.5rem;
+            font-size: 1.1rem;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-family: 'Inter', Arial, sans-serif;
+            transition: all 0.2s;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .address-input:focus {
+            outline: none;
+            border-color: #3171ef;
+            box-shadow: 0 0 0 3px rgba(49, 113, 239, 0.1);
+        }
+
+        .address-input::placeholder {
+            color: #999;
+        }
+
+        @keyframes flash-input {
+            0%, 100% {
+                border-color: #e5e5e5;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            }
+            25%, 75% {
+                border-color: #3171ef;
+                box-shadow: 0 0 0 4px rgba(49, 113, 239, 0.2);
+            }
+            50% {
+                border-color: #3171ef;
+                box-shadow: 0 0 0 6px rgba(49, 113, 239, 0.3);
+            }
+        }
+
+        .flash-animation {
+            animation: flash-input 0.8s ease-in-out 2;
+        }
+
+        .address-submit-btn {
+            background: #3171ef;
+            color: white;
+            padding: 1.25rem 2.5rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: 'Inter', Arial, sans-serif;
+            box-shadow: 0 4px 12px rgba(49, 113, 239, 0.25);
+        }
+
+        .address-submit-btn:hover {
+            background: #2560d9;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(49, 113, 239, 0.3);
+        }
+
+        /* Trust Indicators */
+        .trust-indicators {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .trust-item {
+            text-align: center;
+        }
+
+        .trust-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #3171ef;
+            margin-bottom: 0.25rem;
+        }
+
+        .trust-label {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .trust-separator {
+            color: #ddd;
+            font-size: 1.5rem;
+        }
+
+        /* Dashboard Preview Section */
+        .dashboard-preview-section {
+            padding: 0 7% 80px;
+            background: white;
             width: 100%;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .dashboard-preview-container {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
         }
 
         /* Features Section */
@@ -876,6 +985,10 @@
             transform: translateY(-2px);
         }
 
+        .address-submit-btn[style*="background: white"]:hover {
+            background: #f0f0f0 !important;
+        }
+
         .cta-preview {
             display: none;
         }
@@ -944,6 +1057,19 @@
 
         /* Responsive */
         @media (max-width: 968px) {
+            .address-form {
+                flex-direction: column;
+            }
+
+            .address-input {
+                width: 100%;
+            }
+
+            .address-submit-btn {
+                width: 100%;
+                padding: 1rem;
+            }
+
             nav {
                 padding: 0 5%;
             }
@@ -957,17 +1083,29 @@
             }
 
             .hero {
-                padding: 60px 5%;
-                grid-template-columns: 1fr;
-                gap: 40px;
+                padding: 60px 5% 40px;
             }
 
-            .hero-content {
-                text-align: center;
+            .dashboard-preview-section {
+                padding: 0 5% 60px;
+            }
+
+            .dashboard-preview-container {
+                margin: 0 auto;
+            }
+
+            .trust-indicators {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .trust-separator {
+                display: none;
             }
 
             .hero h1 {
-                font-size: 2.5rem;
+                font-size: 1.75rem;
+                white-space: normal;
             }
 
             .hero-subtitle {
@@ -1109,19 +1247,50 @@
         </ul>
         <div class="nav-auth" id="nav-auth">
             <a href="#" id="nav-signin" onclick="handleSignIn(event)">Log In</a>
-            <a href="#" id="nav-signup" class="btn-get-started" onclick="handleSignUp(event)">Get Started</a>
+            <a href="#" id="nav-signup" class="btn-get-started" onclick="flashAddressInput(event)">Get Started</a>
         </div>
         <button class="mobile-menu-btn">☰</button>
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero">
+    <section id="hero" class="hero">
         <div class="hero-content">
             <h1>Save hundreds on property taxes</h1>
             <p class="hero-subtitle">Get a free assessment to see if you're overpaying. Only pay if we find savings.</p>
-            <a href="#" class="hero-cta" onclick="handleSignUp(event)">Get My Free Assessment</a>
+            <div class="address-form-container">
+                <form id="address-form" class="address-form">
+                    <input
+                        type="text"
+                        id="address-input"
+                        class="address-input"
+                        placeholder="Enter address"
+                        required
+                    />
+                    <button type="submit" class="address-submit-btn">Get My Free Assessment</button>
+                </form>
+            </div>
+            <div class="trust-indicators">
+                <div class="trust-item">
+                    <div class="trust-value">Free</div>
+                    <div class="trust-label">Assessment</div>
+                </div>
+                <div class="trust-separator">•</div>
+                <div class="trust-item">
+                    <div class="trust-value">$500+</div>
+                    <div class="trust-label">Avg. Savings</div>
+                </div>
+                <div class="trust-separator">•</div>
+                <div class="trust-item">
+                    <div class="trust-value">Georgia</div>
+                    <div class="trust-label">Properties</div>
+                </div>
+            </div>
         </div>
-        <div class="hero-image">
+    </section>
+
+    <!-- Dashboard Preview Section -->
+    <section class="dashboard-preview-section">
+        <div class="dashboard-preview-container">
             <div class="dashboard-mockup">
                 <div class="dashboard-header">
                     <h3>Your Property Assessment</h3>
@@ -1309,7 +1478,7 @@
                 <p style="margin: 0 0 1.5rem 0; font-size: 0.9rem; color: #666; line-height: 1.4;">
                     <strong style="color: #3171ef;">$49</strong> for the full PDF report.
                 </p>
-                <a href="#" class="hero-cta" onclick="handleSignUp(event)">Get Started</a>
+                <a href="#hero" class="hero-cta" onclick="scrollToTop(event)">Get Started</a>
             </div>
             <div class="pricing-right">
                 <ul class="pricing-features">
@@ -1321,7 +1490,7 @@
                     <li>Ready for property tax appeals</li>
                 </ul>
                 <p style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e5e5; color: #666; font-size: 0.95rem;">
-                    <strong style="color: #1a1a1a;">Risk-free guarantee:</strong> If we don't find any savings, you pay nothing. Average customer saves $500-$2,000 per year in property taxes.
+                    <strong style="color: #1a1a1a;">Risk-free guarantee:</strong> If we don't find any savings, you pay nothing. Average customer saves $500+ per year in property taxes.
                 </p>
             </div>
         </div>
@@ -1331,8 +1500,8 @@
     <section id="contact" class="cta-section">
         <div class="cta-content">
             <h2>Find out if you're overpaying</h2>
-            <p>Get a free assessment in 5 minutes. Pay only if we find savings. Most customers save $500-$2,000 per year.</p>
-            <a href="#" class="btn-white" onclick="handleSignUp(event)">Get My Free Assessment</a>
+            <p>Get a free assessment in 5 minutes. Pay only if we find savings. Most customers save $500+ per year.</p>
+            <a href="#hero" class="btn-white" onclick="scrollToTop(event)">Get My Free Assessment</a>
             <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.85;">No credit card required • Pay only if we find savings</p>
         </div>
         <div class="cta-preview">
@@ -1420,6 +1589,105 @@
                 console.error('Error opening sign up:', error);
             }
         }
+
+        // Handle address form submissions
+        async function handleAddressSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const addressInput = form.querySelector('.address-input');
+            const address = addressInput.value.trim();
+
+            if (!address) return;
+
+            // Store the address in sessionStorage to use after authentication
+            sessionStorage.setItem('pendingAddress', address);
+
+            if (!clerkLoaded) {
+                alert('Authentication is loading, please wait...');
+                return;
+            }
+
+            try {
+                // If user is already signed in, redirect to dashboard with address
+                if (window.Clerk.user) {
+                    window.location.href = '/dashboard.html#add-property';
+                    return;
+                }
+
+                // Otherwise, open sign up modal
+                await window.Clerk.openSignUp({
+                    redirectUrl: '/dashboard.html#add-property'
+                });
+            } catch (error) {
+                console.error('Error during sign up:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+
+        // Flash the address input field
+        function flashAddressInput(event) {
+            event.preventDefault();
+            const addressInput = document.getElementById('address-input');
+            const heroSection = document.getElementById('hero');
+
+            // Check if hero is already in view
+            const rect = heroSection.getBoundingClientRect();
+            const isInView = rect.top >= -100 && rect.top <= 100;
+
+            if (!isInView) {
+                // If not in view, scroll to hero first
+                heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                setTimeout(() => {
+                    flashInput();
+                }, 500);
+            } else {
+                // If already in view, just flash
+                flashInput();
+            }
+
+            function flashInput() {
+                // Remove animation class if it exists
+                addressInput.classList.remove('flash-animation');
+
+                // Force reflow to restart animation
+                void addressInput.offsetWidth;
+
+                // Add animation class
+                addressInput.classList.add('flash-animation');
+
+                // Focus on the input
+                addressInput.focus();
+
+                // Remove animation class after it completes
+                setTimeout(() => {
+                    addressInput.classList.remove('flash-animation');
+                }, 1600);
+            }
+        }
+
+        // Scroll to top and focus on address input
+        function scrollToTop(event) {
+            event.preventDefault();
+            const addressInput = document.getElementById('address-input');
+            const heroSection = document.getElementById('hero');
+
+            // Smooth scroll to hero
+            heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Focus on the input after scrolling
+            setTimeout(() => {
+                addressInput.focus();
+            }, 500);
+        }
+
+        // Add event listeners to all address forms
+        document.addEventListener('DOMContentLoaded', function() {
+            const addressForms = document.querySelectorAll('.address-form');
+            addressForms.forEach(form => {
+                form.addEventListener('submit', handleAddressSubmit);
+            });
+        });
 
         // Smooth scrolling for navigation links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {

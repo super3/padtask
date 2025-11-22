@@ -1421,6 +1421,41 @@
 
                 // Load properties from backend
                 await loadProperties();
+
+                // Check if we should open the add property form
+                if (window.location.hash === '#add-property') {
+                    // Check for pending address from homepage
+                    const pendingAddress = sessionStorage.getItem('pendingAddress');
+
+                    // Wait a bit for properties to load, then show the form
+                    setTimeout(() => {
+                        const hasProperties = document.getElementById('property-list').children.length > 0;
+
+                        if (hasProperties) {
+                            // Show the add another property form if user has properties
+                            showAddPropertyForm();
+
+                            if (pendingAddress) {
+                                const addressInput = document.getElementById('address-another');
+                                if (addressInput) {
+                                    addressInput.value = pendingAddress;
+                                }
+                            }
+                        } else {
+                            // Pre-fill the initial add property form if no properties
+                            if (pendingAddress) {
+                                const addressInput = document.getElementById('address');
+                                if (addressInput) {
+                                    addressInput.value = pendingAddress;
+                                }
+                            }
+                        }
+
+                        // Clear the pending address and hash
+                        sessionStorage.removeItem('pendingAddress');
+                        window.location.hash = '';
+                    }, 500);
+                }
             } catch (error) {
                 console.error('Error initializing Clerk:', error);
                 if (!isDevelopment) {
