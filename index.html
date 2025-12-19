@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>">
+    <title>Padtask</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: 100vh;
+        }
+
+        /* Shared Panel Styles */
+        .panel {
+            display: grid;
+            grid-template-rows: 64px 1fr auto;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            height: 64px;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1f1f1f;
+            background: #111;
+        }
+
+        .panel-header h1,
+        .panel-header h2 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.025em;
+            text-transform: uppercase;
+        }
+
+        .panel-header .subtitle {
+            font-size: 0.75rem;
+            color: #666;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        /* Chat Panel */
+        .chat-panel {
+            border-right: 1px solid #1f1f1f;
+            background: #0a0a0a;
+        }
+
+        .messages {
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 88%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            line-height: 1.6;
+            font-size: 0.9375rem;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #fff;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+            background: #1a1a1a;
+            color: #d0d0d0;
+            border-bottom-left-radius: 6px;
+            border: 1px solid #252525;
+        }
+
+        .chat-input-container {
+            padding: 20px 24px 24px;
+            background: #0a0a0a;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            background: #111;
+            border: 1px solid #252525;
+            border-radius: 16px;
+            padding: 6px 6px 6px 18px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .chat-input-wrapper:focus-within {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 0;
+            border: none;
+            background: transparent;
+            color: #e0e0e0;
+            font-size: 0.9375rem;
+            font-family: inherit;
+            resize: none;
+            min-height: 24px;
+            max-height: 120px;
+            outline: none;
+        }
+
+        .chat-input::placeholder {
+            color: #555;
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            background: transparent;
+            color: #2563eb;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        .send-btn:disabled {
+            color: #333;
+            cursor: not-allowed;
+        }
+
+        .send-btn:disabled:hover {
+            background: transparent;
+        }
+
+        /* Todo Panel */
+        .todo-panel {
+            background: #0f0f0f;
+        }
+
+        .todo-panel .panel-header {
+            background: #0f0f0f;
+        }
+
+        .todo-stats {
+            font-size: 0.75rem;
+            color: #666;
+            background: #1a1a1a;
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #252525;
+        }
+
+        .todo-content {
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        /* Markdown Rendered Styles */
+        .todo-content h1, .todo-content h2, .todo-content h3 {
+            color: #888;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+            margin-top: 32px;
+        }
+
+        .todo-content h1:first-child,
+        .todo-content h2:first-child,
+        .todo-content h3:first-child {
+            margin-top: 0;
+        }
+
+        .todo-content ul {
+            list-style: none;
+            padding-left: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .todo-content li {
+            padding: 16px 18px;
+            background: #151515;
+            border: 1px solid #1f1f1f;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .todo-content li:hover {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+            transform: translateX(2px);
+        }
+
+        .todo-content input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .todo-content input[type="checkbox"]:hover {
+            border-color: #2563eb;
+        }
+
+        .todo-content input[type="checkbox"]:checked {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+
+        .todo-content input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 2px;
+            width: 6px;
+            height: 11px;
+            border: solid #fff;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        .todo-content li.checked {
+            opacity: 0.5;
+            background: #0f0f0f;
+        }
+
+        .todo-content li.checked span {
+            text-decoration: line-through;
+            color: #555;
+        }
+
+        .todo-content li.checked:hover {
+            opacity: 0.7;
+        }
+
+        .todo-content p {
+            color: #666;
+            margin-bottom: 16px;
+            font-size: 0.875rem;
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #444;
+            text-align: center;
+            padding: 48px;
+        }
+
+        .empty-state-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            border: 2px dashed #2a2a2a;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .empty-state h3 {
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .empty-state p {
+            color: #444;
+            font-size: 0.875rem;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2a;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a3a;
+        }
+
+        /* Loading indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 5px;
+            padding: 16px 20px;
+            background: #1a1a1a;
+            border: 1px solid #252525;
+            border-radius: 16px;
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #444;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr;
+            }
+
+            .chat-panel {
+                border-right: none;
+                border-bottom: 1px solid #1f1f1f;
+            }
+
+            .panel {
+                height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Chat Panel -->
+        <div class="chat-panel panel">
+            <div class="panel-header">
+                <h1>Chat</h1>
+            </div>
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    Hey! Tell me what you need to get done and I'll organize it for you.
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <textarea
+                        class="chat-input"
+                        id="chatInput"
+                        placeholder="I need to..."
+                        rows="1"
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Todo Panel -->
+        <div class="todo-panel panel">
+            <div class="panel-header">
+                <h2>Tasks</h2>
+                <span class="todo-stats" id="todoStats">0 tasks</span>
+            </div>
+            <div class="todo-content" id="todoContent">
+                <div class="empty-state">
+                    <div class="empty-state-icon">+</div>
+                    <h3>No tasks yet</h3>
+                    <p>Start chatting to add tasks</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let todoMarkdown = '';
+        let conversationHistory = [];
+
+        // DOM Elements
+        const messagesContainer = document.getElementById('messages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const todoContent = document.getElementById('todoContent');
+        const todoStats = document.getElementById('todoStats');
+
+        // Auto-resize textarea
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+        });
+
+        // Send on Enter (Shift+Enter for new line)
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+
+        function addMessage(content, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = content;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.id = 'typingIndicator';
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+            messagesContainer.appendChild(indicator);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) indicator.remove();
+        }
+
+        function updateTodoDisplay() {
+            if (!todoMarkdown.trim()) {
+                todoContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">+</div>
+                        <h3>No tasks yet</h3>
+                        <p>Start chatting to add tasks</p>
+                    </div>
+                `;
+                todoStats.textContent = '0 tasks';
+                return;
+            }
+
+            // Parse markdown and render
+            let html = marked.parse(todoMarkdown);
+
+            // Convert markdown checkboxes to interactive ones
+            html = html.replace(/<li>\s*\[ \]/g, '<li><input type="checkbox"> <span>');
+            html = html.replace(/<li>\s*\[x\]/gi, '<li class="checked"><input type="checkbox" checked> <span>');
+            html = html.replace(/<\/li>/g, '</span></li>');
+
+            todoContent.innerHTML = html;
+
+            // Add click handlers for checkboxes
+            todoContent.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
+                checkbox.addEventListener('change', () => toggleTodo(index));
+            });
+
+            // Update stats
+            const total = (todoMarkdown.match(/- \[[ x]\]/gi) || []).length;
+            const completed = (todoMarkdown.match(/- \[x\]/gi) || []).length;
+            todoStats.textContent = `${completed}/${total} completed`;
+        }
+
+        function toggleTodo(index) {
+            // Find and toggle the checkbox in markdown
+            let count = 0;
+            todoMarkdown = todoMarkdown.replace(/- \[[ x]\]/gi, (match) => {
+                if (count === index) {
+                    count++;
+                    return match.toLowerCase() === '- [x]' ? '- [ ]' : '- [x]';
+                }
+                count++;
+                return match;
+            });
+            updateTodoDisplay();
+        }
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+
+            // Disable input while processing
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
+            showTypingIndicator();
+
+            // Add to conversation history
+            conversationHistory.push({ role: 'user', content: message });
+
+            try {
+                // Simulate API call (replace with actual Claude API call)
+                const response = await simulateClaudeResponse(message);
+
+                hideTypingIndicator();
+                addMessage(response.message, 'assistant');
+
+                if (response.todoMarkdown) {
+                    todoMarkdown = response.todoMarkdown;
+                    updateTodoDisplay();
+                }
+
+                conversationHistory.push({ role: 'assistant', content: response.message });
+
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('Sorry, something went wrong. Please try again.', 'assistant');
+            }
+
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            chatInput.focus();
+        }
+
+        // Simulated Claude response (replace with actual API integration)
+        async function simulateClaudeResponse(userMessage) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const lowerMessage = userMessage.toLowerCase();
+
+            // Simple parsing logic for demo
+            if (lowerMessage.includes('add') || lowerMessage.includes('need to') ||
+                lowerMessage.includes('have to') || lowerMessage.includes('should') ||
+                lowerMessage.includes('want to') || lowerMessage.includes('going to')) {
+
+                // Extract tasks from message
+                const tasks = extractTasks(userMessage);
+
+                if (tasks.length > 0) {
+                    // Add to existing markdown
+                    const newTasks = tasks.map(t => `- [ ] ${t}`).join('\n');
+
+                    if (todoMarkdown) {
+                        todoMarkdown += '\n' + newTasks;
+                    } else {
+                        todoMarkdown = '## Today\'s Tasks\n\n' + newTasks;
+                    }
+
+                    return {
+                        message: `Got it! I've added ${tasks.length} task${tasks.length > 1 ? 's' : ''} to your list: ${tasks.join(', ')}.`,
+                        todoMarkdown: todoMarkdown
+                    };
+                }
+            }
+
+            if (lowerMessage.includes('clear') || lowerMessage.includes('reset') || lowerMessage.includes('start over')) {
+                todoMarkdown = '';
+                return {
+                    message: "I've cleared all your tasks. Ready for a fresh start!",
+                    todoMarkdown: ''
+                };
+            }
+
+            if (lowerMessage.includes('done') || lowerMessage.includes('finished') || lowerMessage.includes('completed')) {
+                return {
+                    message: "Great job! You can check off tasks by clicking the checkbox next to them.",
+                    todoMarkdown: todoMarkdown
+                };
+            }
+
+            // Default response
+            return {
+                message: "I can help you manage your tasks! Try saying things like 'I need to buy groceries and call mom' or 'Add a task to review the presentation'.",
+                todoMarkdown: todoMarkdown
+            };
+        }
+
+        function extractTasks(message) {
+            // Remove common prefixes
+            let cleaned = message
+                .replace(/^(i need to|i have to|i should|i want to|i'm going to|add|remind me to)/i, '')
+                .replace(/^(tasks?:?|todo:?)/i, '')
+                .trim();
+
+            // Split by common delimiters
+            let tasks = cleaned
+                .split(/(?:,\s*(?:and\s+)?|\s+and\s+|\.\s+|;\s+)/)
+                .map(t => t.trim())
+                .filter(t => t.length > 2 && t.length < 100);
+
+            // Capitalize first letter of each task
+            tasks = tasks.map(t => t.charAt(0).toUpperCase() + t.slice(1));
+
+            return tasks;
+        }
+
+        // Initialize
+        updateTodoDisplay();
+    </script>
+</body>
+</html>
