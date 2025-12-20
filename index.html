@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>">
-    <title>Padtask</title>
+    <title>PadTask</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
@@ -92,10 +92,15 @@
         .chat-list {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             gap: 2px;
             margin-top: 8px;
+        }
+
+        .sidebar:not(.expanded) .chat-list {
+            overflow: hidden;
         }
 
         .chat-item {
@@ -143,7 +148,7 @@
 
         .sidebar-bottom {
             margin-top: auto;
-            padding-top: 12px;
+            padding: 12px 0;
         }
 
         .user-btn {
@@ -597,13 +602,13 @@
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <button class="sidebar-btn" id="sidebarToggle" title="Menu">
+                <button class="sidebar-btn" id="sidebarToggle" title="PadTask">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="3" y1="12" x2="21" y2="12"></line>
                         <line x1="3" y1="6" x2="21" y2="6"></line>
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                     </svg>
-                    <span>Menu</span>
+                    <span>PadTask</span>
                 </button>
             </div>
 
