@@ -34,9 +34,19 @@
             border-right: 1px solid #1f1f1f;
             display: flex;
             flex-direction: column;
-            padding: 12px 8px;
+            padding: 0 8px 12px;
             transition: width 0.2s ease;
             overflow: hidden;
+        }
+
+        .sidebar-header {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #1f1f1f;
+            margin: 0 -8px;
+            padding: 0 8px;
+            margin-bottom: 12px;
         }
 
         .sidebar.expanded {
@@ -586,14 +596,16 @@
     <div class="container">
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
-            <button class="sidebar-btn" id="sidebarToggle" title="Menu">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-                <span>Menu</span>
-            </button>
+            <div class="sidebar-header">
+                <button class="sidebar-btn" id="sidebarToggle" title="Menu">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                    <span>Menu</span>
+                </button>
+            </div>
 
             <button class="sidebar-btn" title="New chat">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
