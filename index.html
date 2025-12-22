@@ -84,10 +84,20 @@
         .sidebar-btn span {
             display: none;
             font-size: 0.8125rem;
+            font-weight: 400;
+            color: #888;
         }
 
         .sidebar.expanded .sidebar-btn span {
             display: inline;
+        }
+
+        .sidebar-header .sidebar-btn span {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.025em;
+            text-transform: uppercase;
         }
 
         .chat-list {
@@ -109,7 +119,7 @@
             height: 40px;
             background: transparent;
             border: none;
-            color: #444;
+            color: #555;
             cursor: pointer;
             border-radius: 8px;
             display: flex;
@@ -129,11 +139,11 @@
 
         .chat-item:hover {
             background: #151515;
-            color: #666;
+            color: #888;
         }
 
         .chat-item.active {
-            color: #888;
+            color: #555;
         }
 
         .chat-item span {
@@ -141,6 +151,9 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            font-size: 0.8125rem;
+            font-weight: 400;
+            color: #888;
         }
 
         .sidebar.expanded .chat-item span {
@@ -183,6 +196,8 @@
         .user-btn span {
             display: none;
             font-size: 0.8125rem;
+            font-weight: 400;
+            color: #888;
         }
 
         .sidebar.expanded .user-btn span {
