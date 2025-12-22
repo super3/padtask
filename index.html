@@ -37,6 +37,7 @@
             padding: 0 8px 12px;
             transition: width 0.2s ease;
             overflow: hidden;
+            position: relative;
         }
 
         .sidebar-header {
@@ -147,8 +148,10 @@
         }
 
         .sidebar-bottom {
-            margin-top: auto;
-            padding: 12px 0;
+            position: absolute;
+            bottom: 32px;
+            left: 8px;
+            right: 8px;
         }
 
         .user-btn {
@@ -527,8 +530,7 @@
         /* Responsive */
         @media (max-width: 900px) {
             .container {
-                grid-template-columns: auto 1fr;
-                grid-template-rows: 1fr;
+                grid-template-columns: 1fr;
             }
 
             .todo-panel {
@@ -539,25 +541,25 @@
                 border-right: none;
             }
 
-            .panel {
-                height: 100vh;
-            }
-
             .sidebar {
                 width: 0;
                 padding: 0;
                 border: none;
-            }
-
-            .sidebar.expanded {
-                width: 220px;
-                padding: 12px 8px;
-                border-right: 1px solid #1f1f1f;
                 position: fixed;
                 left: 0;
                 top: 0;
                 bottom: 0;
+            }
+
+            .sidebar.expanded {
+                width: 220px;
+                padding: 0 8px 12px;
+                border-right: 1px solid #1f1f1f;
                 z-index: 100;
+            }
+
+            .sidebar-bottom {
+                bottom: 24px;
             }
 
             .mobile-toggle {
