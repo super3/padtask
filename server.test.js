@@ -35,6 +35,15 @@ describe('PadTask Server', () => {
     });
   });
 
+  describe('GET /health', () => {
+    it('should return health status', async () => {
+      const response = await request(app).get('/health');
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('ok');
+      expect(response.body.timestamp).toBeDefined();
+    });
+  });
+
   describe('POST /api/chat', () => {
     it('should return 400 if sessionId is missing', async () => {
       const response = await request(app)

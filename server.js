@@ -22,6 +22,11 @@ app.use(express.json());
 // Serve static files (index.html)
 app.use(express.static(path.join(__dirname)));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Store conversation history per session (in production, use a database)
 const conversations = {};
 
