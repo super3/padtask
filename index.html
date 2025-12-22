@@ -799,6 +799,16 @@
             updateTodoDisplay();
         }
 
+        // Get or create session ID for conversation persistence
+        function getSessionId() {
+            let sessionId = localStorage.getItem('padtask-session-id');
+            if (!sessionId) {
+                sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('padtask-session-id', sessionId);
+            }
+            return sessionId;
+        }
+
         async function sendMessage() {
             const message = chatInput.value.trim();
             if (!message) return;
@@ -817,99 +827,43 @@
             conversationHistory.push({ role: 'user', content: message });
 
             try {
-                // Simulate API call (replace with actual Claude API call)
-                const response = await simulateClaudeResponse(message);
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: getSessionId(),
+                        message: message
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
 
                 hideTypingIndicator();
-                addMessage(response.message, 'assistant');
+                addMessage(data.message, 'assistant');
 
-                if (response.todoMarkdown) {
-                    todoMarkdown = response.todoMarkdown;
+                // Update todo list if response contains tasks
+                if (data.todoMarkdown) {
+                    todoMarkdown = data.todoMarkdown;
                     updateTodoDisplay();
                 }
 
-                conversationHistory.push({ role: 'assistant', content: response.message });
+                conversationHistory.push({ role: 'assistant', content: data.message });
 
             } catch (error) {
                 hideTypingIndicator();
+                console.error('Error:', error);
                 addMessage('Sorry, something went wrong. Please try again.', 'assistant');
             }
 
             chatInput.disabled = false;
             sendBtn.disabled = false;
             chatInput.focus();
-        }
-
-        // Simulated Claude response (replace with actual API integration)
-        async function simulateClaudeResponse(userMessage) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const lowerMessage = userMessage.toLowerCase();
-
-            // Simple parsing logic for demo
-            if (lowerMessage.includes('add') || lowerMessage.includes('need to') ||
-                lowerMessage.includes('have to') || lowerMessage.includes('should') ||
-                lowerMessage.includes('want to') || lowerMessage.includes('going to')) {
-
-                // Extract tasks from message
-                const tasks = extractTasks(userMessage);
-
-                if (tasks.length > 0) {
-                    // Add to existing markdown
-                    const newTasks = tasks.map(t => `- [ ] ${t}`).join('\n');
-
-                    if (todoMarkdown) {
-                        todoMarkdown += '\n' + newTasks;
-                    } else {
-                        todoMarkdown = '## Today\'s Tasks\n\n' + newTasks;
-                    }
-
-                    return {
-                        message: `Got it! I've added ${tasks.length} task${tasks.length > 1 ? 's' : ''} to your list: ${tasks.join(', ')}.`,
-                        todoMarkdown: todoMarkdown
-                    };
-                }
-            }
-
-            if (lowerMessage.includes('clear') || lowerMessage.includes('reset') || lowerMessage.includes('start over')) {
-                todoMarkdown = '';
-                return {
-                    message: "I've cleared all your tasks. Ready for a fresh start!",
-                    todoMarkdown: ''
-                };
-            }
-
-            if (lowerMessage.includes('done') || lowerMessage.includes('finished') || lowerMessage.includes('completed')) {
-                return {
-                    message: "Great job! You can check off tasks by clicking the checkbox next to them.",
-                    todoMarkdown: todoMarkdown
-                };
-            }
-
-            // Default response
-            return {
-                message: "I can help you manage your tasks! Try saying things like 'I need to buy groceries and call mom' or 'Add a task to review the presentation'.",
-                todoMarkdown: todoMarkdown
-            };
-        }
-
-        function extractTasks(message) {
-            // Remove common prefixes
-            let cleaned = message
-                .replace(/^(i need to|i have to|i should|i want to|i'm going to|add|remind me to)/i, '')
-                .replace(/^(tasks?:?|todo:?)/i, '')
-                .trim();
-
-            // Split by common delimiters
-            let tasks = cleaned
-                .split(/(?:,\s*(?:and\s+)?|\s+and\s+|\.\s+|;\s+)/)
-                .map(t => t.trim())
-                .filter(t => t.length > 2 && t.length < 100);
-
-            // Capitalize first letter of each task
-            tasks = tasks.map(t => t.charAt(0).toUpperCase() + t.slice(1));
-
-            return tasks;
         }
 
         // Sidebar toggle
