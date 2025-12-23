@@ -825,8 +825,11 @@
                 createNewChat();
             } else {
                 // Load the most recent chat
-                currentSessionId = chats[0].id;
-                todoMarkdown = chats[0].todoMarkdown || '';
+                const chat = chats[0];
+                currentSessionId = chat.id;
+                todoMarkdown = chat.todoMarkdown || '';
+                conversationHistory = chat.messages || [];
+                loadChatUI(chat);
             }
             renderChatList();
         }
@@ -841,7 +844,8 @@
             const newChat = {
                 id: newId,
                 name: `Chat ${chatNumber}`,
-                todoMarkdown: ''
+                todoMarkdown: '',
+                messages: []
             };
             chats.unshift(newChat); // Add to beginning
             currentSessionId = newId;
@@ -853,7 +857,7 @@
         }
 
         function switchToChat(chatId) {
-            // Save current chat's todo state
+            // Save current chat's state
             const currentChat = chats.find(c => c.id === currentSessionId);
             if (currentChat) {
                 currentChat.todoMarkdown = todoMarkdown;
@@ -865,11 +869,26 @@
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
                 todoMarkdown = chat.todoMarkdown || '';
-                conversationHistory = [];
-                resetChatUI();
+                conversationHistory = chat.messages || [];
+                loadChatUI(chat);
                 updateTodoDisplay();
             }
             renderChatList();
+        }
+
+        function loadChatUI(chat) {
+            messagesContainer.innerHTML = `
+                <div class="message assistant">
+                    Hey! Tell me what you need to get done and I'll organize it for you.
+                </div>
+            `;
+            // Load saved messages
+            if (chat.messages && chat.messages.length > 0) {
+                chat.messages.forEach(msg => {
+                    addMessage(msg.content, msg.role);
+                });
+            }
+            updateTodoDisplay();
         }
 
         function resetChatUI() {
@@ -925,8 +944,13 @@
             sendBtn.disabled = true;
             showTypingIndicator();
 
-            // Add to conversation history
+            // Add to conversation history and save
             conversationHistory.push({ role: 'user', content: message });
+            const chat = chats.find(c => c.id === currentSessionId);
+            if (chat) {
+                chat.messages = conversationHistory;
+                saveChats();
+            }
 
             try {
                 const response = await fetch(`${API_BASE}/api/chat`, {
@@ -964,6 +988,13 @@
                 addMessage(data.message, 'assistant');
 
                 conversationHistory.push({ role: 'assistant', content: data.message });
+
+                // Save assistant message
+                const chatToUpdate = chats.find(c => c.id === currentSessionId);
+                if (chatToUpdate) {
+                    chatToUpdate.messages = conversationHistory;
+                    saveChats();
+                }
 
                 // Update chat name based on first message
                 updateChatName(currentSessionId, message);
