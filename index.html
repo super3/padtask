@@ -766,33 +766,27 @@
 
             // Parse markdown and render
             let html = marked.parse(todoMarkdown);
-
-            // marked GFM creates disabled checkboxes, enable them and wrap text in span
-            html = html.replace(/<input[^>]*type="checkbox"[^>]*disabled[^>]*>/gi, (match) => {
-                const isChecked = match.includes('checked');
-                return isChecked
-                    ? '<input type="checkbox" checked> <span>'
-                    : '<input type="checkbox"> <span>';
-            });
-            html = html.replace(/<\/li>/g, '</span></li>');
-
-            // Add checked class to list items with checked checkboxes
-            html = html.replace(/<li>(\s*<input[^>]*checked[^>]*>)/g, '<li class="checked">$1');
-
             todoContent.innerHTML = html;
 
-            // Add click handlers for checkboxes and list items
+            // Enable checkboxes (marked GFM creates them as disabled)
             todoContent.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
-                checkbox.addEventListener('change', () => toggleTodo(index));
+                checkbox.removeAttribute('disabled');
+
+                // Add checked class to parent li
+                if (checkbox.checked) {
+                    checkbox.closest('li').classList.add('checked');
+                }
+
+                // Handle checkbox clicks
+                checkbox.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleTodo(index);
+                });
             });
 
             // Also allow clicking anywhere on the list item to toggle
             todoContent.querySelectorAll('li').forEach((li, index) => {
-                li.addEventListener('click', (e) => {
-                    if (e.target.tagName !== 'INPUT') {
-                        toggleTodo(index);
-                    }
-                });
+                li.addEventListener('click', () => toggleTodo(index));
             });
 
             // Update stats
