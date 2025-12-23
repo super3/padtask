@@ -799,6 +799,11 @@
             updateTodoDisplay();
         }
 
+        // API base URL - use Railway in production, relative URL in development
+        const API_BASE = window.location.hostname === 'localhost'
+            ? ''
+            : 'https://padtask-production.up.railway.app';
+
         // Get or create session ID for conversation persistence
         function getSessionId() {
             let sessionId = localStorage.getItem('padtask-session-id');
@@ -827,7 +832,7 @@
             conversationHistory.push({ role: 'user', content: message });
 
             try {
-                const response = await fetch('/api/chat', {
+                const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
