@@ -119,9 +119,21 @@ app.post('/api/clear', (req, res) => {
 /* istanbul ignore next */
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`PadTask server running on http://localhost:${PORT}`);
   });
+
+  // Graceful shutdown handling
+  const shutdown = (signal) => {
+    console.log(`${signal} received, shutting down gracefully`);
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT };

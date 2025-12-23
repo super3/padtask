@@ -767,16 +767,32 @@
             // Parse markdown and render
             let html = marked.parse(todoMarkdown);
 
-            // Convert markdown checkboxes to interactive ones
-            html = html.replace(/<li>\s*\[ \]/g, '<li><input type="checkbox"> <span>');
-            html = html.replace(/<li>\s*\[x\]/gi, '<li class="checked"><input type="checkbox" checked> <span>');
+            // marked GFM creates disabled checkboxes, enable them and wrap text in span
+            html = html.replace(/<input[^>]*type="checkbox"[^>]*disabled[^>]*>/gi, (match) => {
+                const isChecked = match.includes('checked');
+                return isChecked
+                    ? '<input type="checkbox" checked> <span>'
+                    : '<input type="checkbox"> <span>';
+            });
             html = html.replace(/<\/li>/g, '</span></li>');
+
+            // Add checked class to list items with checked checkboxes
+            html = html.replace(/<li>(\s*<input[^>]*checked[^>]*>)/g, '<li class="checked">$1');
 
             todoContent.innerHTML = html;
 
-            // Add click handlers for checkboxes
+            // Add click handlers for checkboxes and list items
             todoContent.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
                 checkbox.addEventListener('change', () => toggleTodo(index));
+            });
+
+            // Also allow clicking anywhere on the list item to toggle
+            todoContent.querySelectorAll('li').forEach((li, index) => {
+                li.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'INPUT') {
+                        toggleTodo(index);
+                    }
+                });
             });
 
             // Update stats
@@ -850,13 +866,20 @@
                 const data = await response.json();
 
                 hideTypingIndicator();
-                addMessage(data.message, 'assistant');
 
                 // Update todo list if response contains tasks
                 if (data.todoMarkdown) {
                     todoMarkdown = data.todoMarkdown;
                     updateTodoDisplay();
                 }
+
+                // Strip task markdown from chat message display
+                let displayMessage = data.message;
+                if (data.todoMarkdown) {
+                    // Remove the task list section from the displayed message
+                    displayMessage = displayMessage.replace(/## .+\n\n(- \[[ x]\] .+\n?)+/gi, '').trim();
+                }
+                addMessage(displayMessage, 'assistant');
 
                 conversationHistory.push({ role: 'assistant', content: data.message });
 
