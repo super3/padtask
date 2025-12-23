@@ -90,13 +90,16 @@ app.post('/api/chat', async (req, res) => {
 
     // Extract todo markdown from response
     let todoMarkdown = '';
+    let chatMessage = assistantMessage;
     const todoMatch = assistantMessage.match(/## .+\n\n([\s\S]*?)(?=\n\n[^-]|$)/);
     if (todoMatch) {
       todoMarkdown = todoMatch[0];
+      // Strip task markdown from chat message so it only appears in Tasks panel
+      chatMessage = assistantMessage.replace(todoMatch[0], '').trim();
     }
 
     res.json({
-      message: assistantMessage,
+      message: chatMessage,
       todoMarkdown: todoMarkdown || null
     });
 

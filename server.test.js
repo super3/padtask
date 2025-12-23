@@ -100,7 +100,7 @@ describe('PadTask Server', () => {
     });
 
     it('should extract todoMarkdown from response with tasks', async () => {
-      const taskResponse = '## Today\'s Tasks\n\n- [ ] Buy groceries\n- [ ] Call dentist';
+      const taskResponse = 'Here are your tasks!\n\n## Today\'s Tasks\n\n- [ ] Buy groceries\n- [ ] Call dentist\n\nLet me know if you need help!';
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: taskResponse }]
       });
@@ -112,6 +112,9 @@ describe('PadTask Server', () => {
       expect(response.status).toBe(200);
       expect(response.body.todoMarkdown).toContain('## Today\'s Tasks');
       expect(response.body.todoMarkdown).toContain('- [ ] Buy groceries');
+      // Message should have task markdown stripped
+      expect(response.body.message).not.toContain('## Today\'s Tasks');
+      expect(response.body.message).toContain('Here are your tasks!');
     });
 
     it('should return null todoMarkdown when no tasks in response', async () => {

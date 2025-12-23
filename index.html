@@ -100,6 +100,19 @@
             text-transform: uppercase;
         }
 
+        .chat-list-label {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 16px 12px 8px;
+        }
+
+        .sidebar:not(.expanded) .chat-list-label {
+            display: none;
+        }
+
         .chat-list {
             flex: 1;
             overflow-y: auto;
@@ -107,7 +120,6 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
-            margin-top: 8px;
         }
 
         .sidebar:not(.expanded) .chat-list {
@@ -115,26 +127,24 @@
         }
 
         .chat-item {
-            width: 40px;
-            height: 40px;
+            width: 100%;
+            height: 36px;
             background: transparent;
             border: none;
-            color: #555;
+            color: #666;
             cursor: pointer;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
+            padding: 0 12px;
             transition: all 0.2s;
             text-align: left;
             font-size: 0.8125rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .sidebar.expanded .chat-item {
-            width: 100%;
-            justify-content: flex-start;
-            padding: 0 12px;
+        .sidebar:not(.expanded) .chat-item {
+            display: none;
         }
 
         .chat-item:hover {
@@ -143,21 +153,8 @@
         }
 
         .chat-item.active {
-            color: #555;
-        }
-
-        .chat-item span {
-            display: none;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 0.8125rem;
-            font-weight: 400;
-            color: #888;
-        }
-
-        .sidebar.expanded .chat-item span {
-            display: inline;
+            background: #1a1a1a;
+            color: #999;
         }
 
         .sidebar-bottom {
@@ -629,7 +626,7 @@
                 </button>
             </div>
 
-            <button class="sidebar-btn" title="New chat">
+            <button class="sidebar-btn" id="newChatBtn" title="New chat">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -637,13 +634,9 @@
                 <span>New Chat</span>
             </button>
 
-            <div class="chat-list">
-                <button class="chat-item active" title="Current chat">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span>Current chat</span>
-                </button>
+            <div class="chat-list-label">Chats</div>
+            <div class="chat-list" id="chatList">
+                <!-- Chat items will be dynamically added here -->
             </div>
 
             <div class="sidebar-bottom">
@@ -705,6 +698,8 @@
         // State
         let todoMarkdown = '';
         let conversationHistory = [];
+        let currentSessionId = null;
+        let chats = []; // Array of { id, name, todoMarkdown }
 
         // DOM Elements
         const messagesContainer = document.getElementById('messages');
@@ -712,6 +707,8 @@
         const sendBtn = document.getElementById('sendBtn');
         const todoContent = document.getElementById('todoContent');
         const todoStats = document.getElementById('todoStats');
+        const chatList = document.getElementById('chatList');
+        const newChatBtn = document.getElementById('newChatBtn');
 
         // Auto-resize textarea
         chatInput.addEventListener('input', function() {
@@ -814,14 +811,104 @@
             ? ''
             : 'https://padtask-production.up.railway.app';
 
-        // Get or create session ID for conversation persistence
-        function getSessionId() {
-            let sessionId = localStorage.getItem('padtask-session-id');
-            if (!sessionId) {
-                sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('padtask-session-id', sessionId);
+        // Chat management functions
+        function generateSessionId() {
+            return 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function loadChats() {
+            const saved = localStorage.getItem('padtask-chats');
+            if (saved) {
+                chats = JSON.parse(saved);
             }
-            return sessionId;
+            if (chats.length === 0) {
+                createNewChat();
+            } else {
+                // Load the most recent chat
+                currentSessionId = chats[0].id;
+                todoMarkdown = chats[0].todoMarkdown || '';
+            }
+            renderChatList();
+        }
+
+        function saveChats() {
+            localStorage.setItem('padtask-chats', JSON.stringify(chats));
+        }
+
+        function createNewChat() {
+            const newId = generateSessionId();
+            const chatNumber = chats.length + 1;
+            const newChat = {
+                id: newId,
+                name: `Chat ${chatNumber}`,
+                todoMarkdown: ''
+            };
+            chats.unshift(newChat); // Add to beginning
+            currentSessionId = newId;
+            todoMarkdown = '';
+            conversationHistory = [];
+            saveChats();
+            renderChatList();
+            resetChatUI();
+        }
+
+        function switchToChat(chatId) {
+            // Save current chat's todo state
+            const currentChat = chats.find(c => c.id === currentSessionId);
+            if (currentChat) {
+                currentChat.todoMarkdown = todoMarkdown;
+                saveChats();
+            }
+
+            // Switch to new chat
+            currentSessionId = chatId;
+            const chat = chats.find(c => c.id === chatId);
+            if (chat) {
+                todoMarkdown = chat.todoMarkdown || '';
+                conversationHistory = [];
+                resetChatUI();
+                updateTodoDisplay();
+            }
+            renderChatList();
+        }
+
+        function resetChatUI() {
+            messagesContainer.innerHTML = `
+                <div class="message assistant">
+                    Hey! Tell me what you need to get done and I'll organize it for you.
+                </div>
+            `;
+            updateTodoDisplay();
+        }
+
+        function updateChatName(sessionId, message) {
+            const chat = chats.find(c => c.id === sessionId);
+            if (chat && chat.name.startsWith('Chat ')) {
+                // Use first few words of first message as chat name
+                chat.name = message.slice(0, 30) + (message.length > 30 ? '...' : '');
+                saveChats();
+                renderChatList();
+            }
+        }
+
+        function renderChatList() {
+            chatList.innerHTML = chats.map(chat => `
+                <button class="chat-item ${chat.id === currentSessionId ? 'active' : ''}"
+                        data-chat-id="${chat.id}" title="${chat.name}">
+                    ${chat.name}
+                </button>
+            `).join('');
+
+            // Add click handlers
+            chatList.querySelectorAll('.chat-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    switchToChat(item.dataset.chatId);
+                });
+            });
+        }
+
+        function getSessionId() {
+            return currentSessionId;
         }
 
         async function sendMessage() {
@@ -865,17 +952,21 @@
                 if (data.todoMarkdown) {
                     todoMarkdown = data.todoMarkdown;
                     updateTodoDisplay();
+                    // Save todo state to current chat
+                    const chat = chats.find(c => c.id === currentSessionId);
+                    if (chat) {
+                        chat.todoMarkdown = todoMarkdown;
+                        saveChats();
+                    }
                 }
 
-                // Strip task markdown from chat message display
-                let displayMessage = data.message;
-                if (data.todoMarkdown) {
-                    // Remove the task list section from the displayed message
-                    displayMessage = displayMessage.replace(/## .+\n\n(- \[[ x]\] .+\n?)+/gi, '').trim();
-                }
-                addMessage(displayMessage, 'assistant');
+                // Display chat message (server already strips task markdown)
+                addMessage(data.message, 'assistant');
 
                 conversationHistory.push({ role: 'assistant', content: data.message });
+
+                // Update chat name based on first message
+                updateChatName(currentSessionId, message);
 
             } catch (error) {
                 hideTypingIndicator();
@@ -901,7 +992,11 @@
             sidebar.classList.toggle('expanded');
         });
 
+        // New chat button
+        newChatBtn.addEventListener('click', createNewChat);
+
         // Initialize
+        loadChats();
         updateTodoDisplay();
     </script>
 </body>
