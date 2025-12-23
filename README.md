@@ -1,5 +1,8 @@
 # PadTask
 
+[![Frontend](https://img.shields.io/github/actions/workflow/status/super3/padtask/deploy.yml?branch=main&label=frontend)](https://github.com/super3/padtask/actions/workflows/deploy.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/super3/padtask/tests.yml?branch=main&label=tests)](https://github.com/super3/padtask/actions/workflows/tests.yml)
+
 AI-powered task organizer using Claude.
 
 ## Setup
@@ -48,7 +51,3 @@ Open http://localhost:3000
 npm test              # Run tests
 npm run test:coverage # Run tests with coverage
 ```
-
-## License
-
-MIT
