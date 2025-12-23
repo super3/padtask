@@ -217,7 +217,7 @@ describe('PadTask Server', () => {
 
       expect(mockCreate).toHaveBeenCalledTimes(1);
       const callArgs = mockCreate.mock.calls[0][0];
-      expect(callArgs.model).toBe('claude-sonnet-4-5-20250514');
+      expect(callArgs.model).toBe('claude-sonnet-4-20250514');
       expect(callArgs.max_tokens).toBe(1024);
       expect(callArgs.system).toBe(SYSTEM_PROMPT);
       // Messages at time of call included only the user message
