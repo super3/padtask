@@ -472,8 +472,8 @@
             display: flex;
             align-items: center;
             gap: 14px;
-            cursor: pointer;
             transition: all 0.2s;
+            user-select: text;
         }
 
         .todo-content li:hover {
@@ -855,10 +855,6 @@
                 });
             });
 
-            // Also allow clicking anywhere on the list item to toggle
-            todoContent.querySelectorAll('li').forEach((li, index) => {
-                li.addEventListener('click', () => toggleTodo(index));
-            });
 
             // Update stats
             const total = (todoMarkdown.match(/- \[[ x]\]/gi) || []).length;
