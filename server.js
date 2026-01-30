@@ -53,7 +53,7 @@ If the user asks to clear tasks or start over, acknowledge it (don't output any 
 If the user's message isn't about tasks, respond helpfully.`;
 
 app.post('/api/chat', async (req, res) => {
-  const { sessionId, message } = req.body;
+  const { sessionId, message, currentTasks } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: 'sessionId and message are required' });
@@ -75,11 +75,17 @@ app.post('/api/chat', async (req, res) => {
     conversations[sessionId] = conversations[sessionId].slice(-20);
   }
 
+  // Build system prompt with current tasks context
+  let systemPrompt = SYSTEM_PROMPT;
+  if (currentTasks && currentTasks.trim()) {
+    systemPrompt += `\n\nCURRENT TASK LIST (include and update this when outputting tasks):\n${currentTasks}`;
+  }
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: conversations[sessionId]
     });
 
@@ -97,9 +103,9 @@ app.post('/api/chat', async (req, res) => {
     let todoMarkdown = '';
     let chatMessage = assistantMessage;
 
-    // Match all sections that contain checkbox items
+    // Match all sections that contain checkbox items (1-2 newlines after heading)
     const sections = [];
-    const sectionRegex = /## .+\n\n(?:- \[[ x]\] .+\n?)+/gi;
+    const sectionRegex = /## .+\n\n?(?:- \[[ x]\] .+\n?)+/gi;
     let match;
     while ((match = sectionRegex.exec(assistantMessage)) !== null) {
       sections.push(match[0]);
