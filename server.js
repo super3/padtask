@@ -32,20 +32,25 @@ const conversations = {};
 
 const SYSTEM_PROMPT = `You are a helpful task organizer assistant for PadTask. Your job is to help users organize their tasks and todos.
 
-When a user describes tasks they need to do, extract them and respond with:
-1. A brief, friendly acknowledgment
-2. The tasks formatted as a markdown list with checkboxes
+IMPORTANT: When a user provides tasks or asks you to add/modify tasks, you MUST output the complete updated task list in markdown format. This is how tasks get saved to the system.
 
-Format your task lists like this:
-## Today's Tasks
+When responding with tasks, ALWAYS format them like this:
+## Section Name
 
 - [ ] Task one
 - [ ] Task two
-- [ ] Task three
+- [x] Completed task
 
-Keep responses concise and friendly. If the user asks to clear tasks or start over, acknowledge it.
-If the user marks something as done or completed, congratulate them briefly.
-If the user's message isn't about tasks, respond helpfully but try to steer back to task management.`;
+Rules:
+1. ALWAYS output the full task list in markdown format when tasks are added, modified, or discussed
+2. If the user provides tasks directly (even in their message), output them as markdown checkboxes
+3. Preserve existing tasks and add new ones - maintain the complete list
+4. Use "- [ ]" for incomplete tasks and "- [x]" for completed tasks
+5. Group tasks under section headings (## Section Name) when appropriate
+6. After the task markdown, you may add a brief friendly comment
+
+If the user asks to clear tasks or start over, acknowledge it (don't output any task markdown).
+If the user's message isn't about tasks, respond helpfully.`;
 
 app.post('/api/chat', async (req, res) => {
   const { sessionId, message } = req.body;
@@ -88,14 +93,26 @@ app.post('/api/chat', async (req, res) => {
       content: assistantMessage
     });
 
-    // Extract todo markdown from response
+    // Extract todo markdown from response (all sections with checkboxes)
     let todoMarkdown = '';
     let chatMessage = assistantMessage;
-    const todoMatch = assistantMessage.match(/## .+\n\n([\s\S]*?)(?=\n\n[^-]|$)/);
-    if (todoMatch) {
-      todoMarkdown = todoMatch[0];
-      // Strip task markdown from chat message so it only appears in Tasks panel
-      chatMessage = assistantMessage.replace(todoMatch[0], '').trim();
+
+    // Match all sections that contain checkbox items
+    const sections = [];
+    const sectionRegex = /## .+\n\n(?:- \[[ x]\] .+\n?)+/gi;
+    let match;
+    while ((match = sectionRegex.exec(assistantMessage)) !== null) {
+      sections.push(match[0]);
+    }
+
+    if (sections.length > 0) {
+      todoMarkdown = sections.join('\n');
+      // Strip all task sections from chat message
+      chatMessage = assistantMessage;
+      sections.forEach(section => {
+        chatMessage = chatMessage.replace(section, '');
+      });
+      chatMessage = chatMessage.trim();
     }
 
     res.json({
