@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
+const { clerkMiddleware, getAuth } = require('@clerk/express');
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +19,35 @@ const setAnthropicClient = (client) => {
 
 app.use(cors());
 app.use(express.json());
+
+// Use Clerk middleware for authentication
+/* istanbul ignore next */
+if (process.env.CLERK_PUBLISHABLE_KEY) {
+  app.use(clerkMiddleware());
+}
+
+// Auth verification function (can be overridden for testing)
+/* istanbul ignore next */
+let verifyAuth = (req) => {
+  try {
+    const { userId } = getAuth(req);
+    return userId || null;
+  } catch {
+    return null;
+  }
+};
+
+const setVerifyAuth = (fn) => { verifyAuth = fn; };
+
+// Auth middleware for protected routes
+function requireAuth(req, res, next) {
+  const userId = verifyAuth(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  req.userId = userId;
+  next();
+}
 
 // Serve static files (index.html)
 app.use(express.static(path.join(__dirname)));
@@ -52,7 +82,7 @@ Rules:
 If the user asks to clear tasks or start over, acknowledge it (don't output any task markdown).
 If the user's message isn't about tasks, respond helpfully.`;
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, async (req, res) => {
   const { sessionId, message, currentTasks } = req.body;
 
   if (!sessionId || !message) {
@@ -133,7 +163,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Clear conversation endpoint
-app.post('/api/clear', (req, res) => {
+app.post('/api/clear', requireAuth, (req, res) => {
   const { sessionId } = req.body;
   if (sessionId && conversations[sessionId]) {
     delete conversations[sessionId];
@@ -162,4 +192,4 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT };
+module.exports = { app, conversations, setAnthropicClient, setVerifyAuth, SYSTEM_PROMPT };

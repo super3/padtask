@@ -6,6 +6,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>">
     <title>PadTask</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="pk_test_bGVhcm5pbmctc3BpZGVyLTU3LmNsZXJrLmFjY291bnRzLmRldiQ"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        type="text/javascript"
+    ></script>
     <style>
         * {
             margin: 0;
@@ -714,6 +721,7 @@
             </div>
 
             <div class="sidebar-bottom">
+                <div id="clerkUserButton"></div>
                 <button class="user-btn" id="userBtn" title="Account">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="8" r="4"></circle>
@@ -774,6 +782,7 @@
         let conversationHistory = [];
         let currentSessionId = null;
         let chats = []; // Array of { id, name, todoMarkdown }
+        let isSignedIn = false;
 
         // DOM Elements
         const messagesContainer = document.getElementById('messages');
@@ -783,6 +792,97 @@
         const todoStats = document.getElementById('todoStats');
         const chatList = document.getElementById('chatList');
         const newChatBtn = document.getElementById('newChatBtn');
+        const userBtn = document.getElementById('userBtn');
+        const clerkUserButtonDiv = document.getElementById('clerkUserButton');
+
+        // Clerk Authentication
+        function waitForClerk(timeout = 5000) {
+            return new Promise((resolve) => {
+                if (window.Clerk) return resolve(window.Clerk);
+                const start = Date.now();
+                const interval = setInterval(() => {
+                    if (window.Clerk) {
+                        clearInterval(interval);
+                        resolve(window.Clerk);
+                    } else if (Date.now() - start > timeout) {
+                        clearInterval(interval);
+                        resolve(null);
+                    }
+                }, 100);
+            });
+        }
+
+        async function initClerk() {
+            const clerk = await waitForClerk();
+            if (!clerk) {
+                console.warn('Clerk failed to load');
+                return;
+            }
+
+            await clerk.load();
+
+            if (clerk.user) {
+                handleSignedIn();
+            } else {
+                handleSignedOut();
+            }
+
+            // Listen for auth state changes
+            clerk.addListener(({ user }) => {
+                if (user) {
+                    handleSignedIn();
+                } else {
+                    handleSignedOut();
+                }
+            });
+        }
+
+        function handleSignedIn() {
+            isSignedIn = true;
+            userBtn.style.display = 'none';
+            clerkUserButtonDiv.style.display = 'block';
+            window.Clerk.mountUserButton(clerkUserButtonDiv, {
+                afterSignOutUrl: window.location.href,
+                appearance: {
+                    elements: {
+                        rootBox: { width: '40px', height: '40px' },
+                        userButtonBox: { width: '40px', height: '40px' },
+                        userButtonTrigger: { width: '40px', height: '40px', borderRadius: '8px' },
+                        userButtonAvatarBox: { width: '40px', height: '40px', borderRadius: '8px', overflow: 'hidden' },
+                        avatarBox: { width: '40px', height: '40px', borderRadius: '8px', overflow: 'hidden' },
+                        avatarImage: { width: '100%', height: '100%', objectFit: 'cover' },
+                        userButtonOuterIdentifier: { display: 'none' }
+                    }
+                }
+            });
+            chatInput.disabled = false;
+            chatInput.placeholder = 'I need to...';
+            sendBtn.disabled = false;
+        }
+
+        function handleSignedOut() {
+            isSignedIn = false;
+            userBtn.style.display = 'flex';
+            clerkUserButtonDiv.style.display = 'none';
+            chatInput.disabled = true;
+            chatInput.placeholder = 'Sign in to start chatting...';
+            sendBtn.disabled = true;
+        }
+
+        async function handleSignIn() {
+            const clerk = await waitForClerk();
+            if (!clerk) return;
+            if (!clerk.loaded) await clerk.load();
+            await clerk.openSignIn({
+                fallbackRedirectUrl: window.location.href
+            });
+        }
+
+        // Sign in button click
+        userBtn.addEventListener('click', handleSignIn);
+
+        // Initialize Clerk
+        initClerk();
 
         // Auto-resize textarea
         chatInput.addEventListener('input', function() {
@@ -1090,7 +1190,7 @@
 
         async function sendMessage() {
             const message = chatInput.value.trim();
-            if (!message) return;
+            if (!message || !isSignedIn) return;
 
             // Add user message
             addMessage(message, 'user');
@@ -1111,10 +1211,14 @@
             }
 
             try {
+                // Get Clerk auth token
+                const token = await window.Clerk.session.getToken();
+
                 const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
                         sessionId: getSessionId(),

@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
+const { app, conversations, setAnthropicClient, setVerifyAuth, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {
   // Mock Anthropic client
@@ -17,13 +17,15 @@ describe('PadTask Server', () => {
     mockCreate.mockReset();
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
+    // Simulate authenticated user for most tests
+    setVerifyAuth(() => 'test-user-id');
   });
 
   describe('SYSTEM_PROMPT', () => {
     it('should be defined and contain task-related instructions', () => {
       expect(SYSTEM_PROMPT).toBeDefined();
       expect(SYSTEM_PROMPT).toContain('task organizer');
-      expect(SYSTEM_PROMPT).toContain('## Today\'s Tasks');
+      expect(SYSTEM_PROMPT).toContain('## Section Name');
     });
   });
 
@@ -41,6 +43,54 @@ describe('PadTask Server', () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('ok');
       expect(response.body.timestamp).toBeDefined();
+    });
+  });
+
+  describe('Authentication middleware', () => {
+    it('should return 401 on /api/chat when not authenticated', async () => {
+      setVerifyAuth(() => null);
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Authentication required');
+    });
+
+    it('should return 401 on /api/clear when not authenticated', async () => {
+      setVerifyAuth(() => null);
+      const response = await request(app)
+        .post('/api/clear')
+        .send({ sessionId: 'test' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Authentication required');
+    });
+
+    it('should allow access when authenticated', async () => {
+      setVerifyAuth(() => 'user-123');
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('should set req.userId when authenticated', async () => {
+      setVerifyAuth(() => 'user-abc');
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(200);
     });
   });
 
@@ -229,6 +279,22 @@ describe('PadTask Server', () => {
           expect.objectContaining({ role: 'user', content: 'Test message' })
         ])
       );
+    });
+
+    it('should include currentTasks in system prompt when provided', async () => {
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Updated tasks!' }]
+      });
+
+      const currentTasks = '## My Tasks\n\n- [ ] Existing task';
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'tasks-session', message: 'Add another task', currentTasks });
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      const callArgs = mockCreate.mock.calls[0][0];
+      expect(callArgs.system).toContain('CURRENT TASK LIST');
+      expect(callArgs.system).toContain(currentTasks);
     });
   });
 
