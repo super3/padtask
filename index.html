@@ -282,6 +282,26 @@
             display: inline;
         }
 
+        #clerkUserButton {
+            display: none;
+        }
+
+        #clerkUserButton.visible {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .sidebar.expanded #clerkUserButton.visible {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 0 12px;
+        }
+
         /* Shared Panel Styles */
         .panel {
             display: grid;
@@ -836,17 +856,14 @@
 
         function handleSignedIn() {
             userBtn.style.display = 'none';
-            clerkUserButtonDiv.style.display = 'block';
+            clerkUserButtonDiv.classList.add('visible');
             window.Clerk.mountUserButton(clerkUserButtonDiv, {
                 afterSignOutUrl: window.location.href,
                 appearance: {
                     elements: {
-                        rootBox: { width: '40px', height: '40px' },
-                        userButtonBox: { width: '40px', height: '40px' },
-                        userButtonTrigger: { width: '40px', height: '40px', borderRadius: '50%' },
-                        userButtonAvatarBox: { width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden' },
-                        avatarBox: { width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden' },
-                        avatarImage: { width: '100%', height: '100%', objectFit: 'cover' },
+                        userButtonTrigger: { borderRadius: '8px' },
+                        userButtonAvatarBox: { borderRadius: '8px' },
+                        avatarBox: { borderRadius: '8px' },
                         userButtonOuterIdentifier: { display: 'none' }
                     }
                 }
@@ -855,7 +872,7 @@
 
         function handleSignedOut() {
             userBtn.style.display = 'flex';
-            clerkUserButtonDiv.style.display = 'none';
+            clerkUserButtonDiv.classList.remove('visible');
         }
 
         async function handleSignIn() {
