@@ -283,8 +283,35 @@
         }
 
 
-        #clerkUserButton {
+        .clerk-profile {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            width: 40px;
             height: 40px;
+        }
+
+        .clerk-profile.visible {
+            display: flex;
+        }
+
+        .sidebar.expanded .clerk-profile {
+            width: 100%;
+            padding: 0 8px;
+        }
+
+        .clerk-profile-name {
+            display: none;
+            font-size: 0.8125rem;
+            font-weight: 400;
+            color: #888;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar.expanded .clerk-profile-name {
+            display: inline;
         }
 
         /* Shared Panel Styles */
@@ -726,7 +753,10 @@
             </div>
 
             <div class="sidebar-bottom">
-                <div id="clerkUserButton"></div>
+                <div class="clerk-profile" id="clerkProfile">
+                    <div id="clerkUserButton"></div>
+                    <span class="clerk-profile-name" id="clerkProfileName"></span>
+                </div>
                 <button class="user-btn" id="userBtn" title="Account">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="8" r="4"></circle>
@@ -798,6 +828,8 @@
         const newChatBtn = document.getElementById('newChatBtn');
         const userBtn = document.getElementById('userBtn');
         const clerkUserButtonDiv = document.getElementById('clerkUserButton');
+        const clerkProfile = document.getElementById('clerkProfile');
+        const clerkProfileName = document.getElementById('clerkProfileName');
 
         // Clerk Authentication (frontend-only, optional)
         function waitForClerk(timeout = 5000) {
@@ -839,6 +871,10 @@
         }
 
         function showClerkButton() {
+            const user = window.Clerk.user;
+            const name = user.firstName || user.emailAddresses?.[0]?.emailAddress || 'Account';
+            clerkProfileName.textContent = name;
+
             window.Clerk.mountUserButton(clerkUserButtonDiv, {
                 afterSignOutUrl: window.location.href,
                 appearance: {
@@ -858,6 +894,7 @@
             const poll = setInterval(() => {
                 if (clerkUserButtonDiv.querySelector('button')) {
                     userBtn.style.display = 'none';
+                    clerkProfile.classList.add('visible');
                     clearInterval(poll);
                 }
             }, 50);
@@ -865,6 +902,7 @@
 
         function hideClerkButton() {
             userBtn.style.display = 'flex';
+            clerkProfile.classList.remove('visible');
             window.Clerk.unmountUserButton(clerkUserButtonDiv);
         }
 
