@@ -288,6 +288,7 @@
 
         #clerkUserButton.visible {
             display: block;
+            padding: 4px 0;
         }
 
         /* Shared Panel Styles */
@@ -846,15 +847,7 @@
             userBtn.style.display = 'none';
             clerkUserButtonDiv.classList.add('visible');
             window.Clerk.mountUserButton(clerkUserButtonDiv, {
-                afterSignOutUrl: window.location.href,
-                appearance: {
-                    elements: {
-                        userButtonTrigger: { borderRadius: '8px' },
-                        userButtonAvatarBox: { borderRadius: '8px' },
-                        avatarBox: { borderRadius: '8px' },
-                        userButtonOuterIdentifier: { display: 'none' }
-                    }
-                }
+                afterSignOutUrl: window.location.href
             });
         }
 
