@@ -286,11 +286,6 @@
             display: none;
         }
 
-        #clerkUserButton.visible {
-            display: block;
-            padding: 4px 0;
-        }
-
         /* Shared Panel Styles */
         .panel {
             display: grid;
@@ -820,6 +815,8 @@
             });
         }
 
+        let clerkMounted = false;
+
         async function initClerk() {
             const clerk = await waitForClerk();
             if (!clerk) {
@@ -829,31 +826,32 @@
 
             await clerk.load();
 
-            if (clerk.user) {
-                handleSignedIn();
-            }
+            updateAuthUI(clerk.user);
 
-            // Listen for auth state changes
             clerk.addListener(({ user }) => {
-                if (user) {
-                    handleSignedIn();
-                } else {
-                    handleSignedOut();
+                updateAuthUI(user);
+            });
+        }
+
+        function updateAuthUI(user) {
+            if (user) {
+                if (!clerkMounted) {
+                    clerkMounted = true;
+                    clerkUserButtonDiv.style.display = 'block';
+                    window.Clerk.mountUserButton(clerkUserButtonDiv, {
+                        afterSignOutUrl: window.location.href
+                    });
                 }
-            });
-        }
-
-        function handleSignedIn() {
-            userBtn.style.display = 'none';
-            clerkUserButtonDiv.classList.add('visible');
-            window.Clerk.mountUserButton(clerkUserButtonDiv, {
-                afterSignOutUrl: window.location.href
-            });
-        }
-
-        function handleSignedOut() {
-            userBtn.style.display = 'flex';
-            clerkUserButtonDiv.classList.remove('visible');
+                userBtn.style.display = 'none';
+                clerkUserButtonDiv.style.display = 'block';
+            } else {
+                userBtn.style.display = 'flex';
+                clerkUserButtonDiv.style.display = 'none';
+                if (clerkMounted) {
+                    window.Clerk.unmountUserButton(clerkUserButtonDiv);
+                    clerkMounted = false;
+                }
+            }
         }
 
         async function handleSignIn() {
