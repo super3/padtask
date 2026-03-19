@@ -308,6 +308,11 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            cursor: pointer;
+        }
+
+        .clerk-profile-name:hover {
+            color: #ccc;
         }
 
         .sidebar.expanded .clerk-profile-name {
@@ -830,6 +835,11 @@
         const clerkUserButtonDiv = document.getElementById('clerkUserButton');
         const clerkProfile = document.getElementById('clerkProfile');
         const clerkProfileName = document.getElementById('clerkProfileName');
+
+        clerkProfileName.addEventListener('click', () => {
+            const btn = clerkUserButtonDiv.querySelector('button');
+            if (btn) btn.click();
+        });
 
         // Clerk Authentication (frontend-only, optional)
         function waitForClerk(timeout = 5000) {
