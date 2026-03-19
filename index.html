@@ -284,20 +284,7 @@
 
 
         #clerkUserButton {
-            display: none;
-            width: 40px;
             height: 40px;
-        }
-
-        #clerkUserButton.visible {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .sidebar.expanded #clerkUserButton.visible {
-            width: 100%;
-            padding: 0 4px;
         }
 
         /* Shared Panel Styles */
@@ -852,8 +839,6 @@
         }
 
         function showClerkButton() {
-            userBtn.style.display = 'none';
-            clerkUserButtonDiv.classList.add('visible');
             window.Clerk.mountUserButton(clerkUserButtonDiv, {
                 afterSignOutUrl: window.location.href,
                 appearance: {
@@ -863,18 +848,23 @@
                         avatarImage: { borderRadius: '6px' },
                         userButtonTrigger: {
                             borderRadius: '8px',
-                            padding: '4px',
-                            '&:hover': { backgroundColor: '#151515' }
+                            padding: '4px'
                         },
                         userButtonOuterIdentifier: { display: 'none' }
                     }
                 }
             });
+            // Wait for Clerk to actually render before swapping
+            const poll = setInterval(() => {
+                if (clerkUserButtonDiv.querySelector('button')) {
+                    userBtn.style.display = 'none';
+                    clearInterval(poll);
+                }
+            }, 50);
         }
 
         function hideClerkButton() {
             userBtn.style.display = 'flex';
-            clerkUserButtonDiv.classList.remove('visible');
             window.Clerk.unmountUserButton(clerkUserButtonDiv);
         }
 
