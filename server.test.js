@@ -23,7 +23,7 @@ describe('PadTask Server', () => {
     it('should be defined and contain task-related instructions', () => {
       expect(SYSTEM_PROMPT).toBeDefined();
       expect(SYSTEM_PROMPT).toContain('task organizer');
-      expect(SYSTEM_PROMPT).toContain('## Today\'s Tasks');
+      expect(SYSTEM_PROMPT).toContain('## Section Name');
     });
   });
 
@@ -229,6 +229,22 @@ describe('PadTask Server', () => {
           expect.objectContaining({ role: 'user', content: 'Test message' })
         ])
       );
+    });
+
+    it('should include currentTasks in system prompt when provided', async () => {
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Updated tasks!' }]
+      });
+
+      const currentTasks = '## My Tasks\n\n- [ ] Existing task';
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'tasks-session', message: 'Add another task', currentTasks });
+
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      const callArgs = mockCreate.mock.calls[0][0];
+      expect(callArgs.system).toContain('CURRENT TASK LIST');
+      expect(callArgs.system).toContain(currentTasks);
     });
   });
 
