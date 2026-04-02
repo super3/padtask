@@ -1,4 +1,15 @@
 const request = require('supertest');
+
+// Mock db module — tests use in-memory fallback
+jest.mock('./db', () => ({
+  getConversation: jest.fn().mockResolvedValue(null),
+  saveConversation: jest.fn().mockResolvedValue(false),
+  deleteConversation: jest.fn().mockResolvedValue(false),
+  initDatabase: jest.fn().mockResolvedValue(false),
+  closePool: jest.fn().mockResolvedValue(undefined),
+  setPool: jest.fn()
+}));
+
 const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {

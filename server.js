@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
+const db = require('./db');
 require('dotenv').config();
 
 const app = express();
@@ -27,7 +28,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Store conversation history per session (in production, use a database)
+// In-memory fallback when DATABASE_URL is not set
 const conversations = {};
 
 const SYSTEM_PROMPT = `You are a helpful task organizer assistant for PadTask. Your job is to help users organize their tasks and todos.
@@ -59,8 +60,12 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'sessionId and message are required' });
   }
 
-  // Initialize session if needed
-  if (!conversations[sessionId]) {
+  // Load conversation from DB or fall back to in-memory
+  let history = await db.getConversation(sessionId);
+  if (history !== null) {
+    // DB is available — sync to in-memory for consistent access
+    conversations[sessionId] = history;
+  } else if (!conversations[sessionId]) {
     conversations[sessionId] = [];
   }
 
@@ -134,6 +139,9 @@ app.post('/api/chat', async (req, res) => {
       content: chatMessage || assistantMessage
     });
 
+    // Persist to database (non-blocking, best-effort)
+    db.saveConversation(sessionId, conversations[sessionId]).catch(() => {});
+
     res.json({
       message: chatMessage,
       todoMarkdown: todoMarkdown || null,
@@ -147,10 +155,11 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Clear conversation endpoint
-app.post('/api/clear', (req, res) => {
+app.post('/api/clear', async (req, res) => {
   const { sessionId } = req.body;
-  if (sessionId && conversations[sessionId]) {
+  if (sessionId) {
     delete conversations[sessionId];
+    await db.deleteConversation(sessionId).catch(() => {});
   }
   res.json({ success: true });
 });
@@ -159,6 +168,19 @@ app.post('/api/clear', (req, res) => {
 /* istanbul ignore next */
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
+
+  db.initDatabase()
+    .then((dbReady) => {
+      if (dbReady) {
+        console.log('Database connected and initialized');
+      } else {
+        console.log('No DATABASE_URL set — using in-memory conversation storage');
+      }
+    })
+    .catch((err) => {
+      console.error('Database initialization failed, falling back to in-memory:', err.message);
+    });
+
   const server = app.listen(PORT, () => {
     console.log(`PadTask server running on http://localhost:${PORT}`);
   });
@@ -166,7 +188,8 @@ if (require.main === module) {
   // Graceful shutdown handling
   const shutdown = (signal) => {
     console.log(`${signal} received, shutting down gracefully`);
-    server.close(() => {
+    server.close(async () => {
+      await db.closePool();
       console.log('Server closed');
       process.exit(0);
     });
