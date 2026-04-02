@@ -620,7 +620,7 @@
             font-size: 0.875rem;
         }
 
-        /* Task action buttons */
+        /* Task action buttons - floating toolbar */
         .todo-content li {
             position: relative;
         }
@@ -628,22 +628,31 @@
         .task-actions {
             display: flex;
             gap: 2px;
-            margin-left: auto;
+            position: absolute;
+            right: 8px;
+            top: -14px;
+            background: #1e1e1e;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 2px;
             opacity: 0;
+            pointer-events: none;
             transition: opacity 0.15s;
-            flex-shrink: 0;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         .todo-content li:hover .task-actions {
             opacity: 1;
+            pointer-events: auto;
         }
 
         .task-action-btn {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             background: transparent;
             border: none;
-            color: #555;
+            color: #666;
             cursor: pointer;
             border-radius: 6px;
             display: flex;
@@ -654,7 +663,7 @@
         }
 
         .task-action-btn:hover {
-            background: #252525;
+            background: #2a2a2a;
             color: #aaa;
         }
 
