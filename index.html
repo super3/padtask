@@ -620,6 +620,76 @@
             font-size: 0.875rem;
         }
 
+        /* Task action buttons - floating toolbar */
+        .todo-content li {
+            position: relative;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 2px;
+            position: absolute;
+            right: 8px;
+            top: -14px;
+            background: #1e1e1e;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 2px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .todo-content li:hover .task-actions {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .task-action-btn {
+            width: 26px;
+            height: 26px;
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            padding: 0;
+        }
+
+        .task-action-btn:hover {
+            background: #2a2a2a;
+            color: #aaa;
+        }
+
+        .task-action-btn.delete-btn:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        /* Inline task editing */
+        .task-edit-input {
+            background: #1a1a1a;
+            border: 1px solid #2563eb;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 0.875rem;
+            padding: 4px 8px;
+            flex: 1;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .task-text {
+            flex: 1;
+            min-width: 0;
+        }
+
         /* Empty state */
         .empty-state {
             display: flex;
@@ -1048,22 +1118,89 @@
                 });
             });
 
-            // Enable checkboxes (marked GFM creates them as disabled)
+            // Enable checkboxes and add action buttons
             todoContent.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
                 checkbox.removeAttribute('disabled');
+                const li = checkbox.closest('li');
 
                 // Add checked class to parent li
                 if (checkbox.checked) {
-                    checkbox.closest('li').classList.add('checked');
+                    li.classList.add('checked');
                 }
+
+                // Wrap text content in a span for flex layout
+                const textNodes = [];
+                li.childNodes.forEach(node => {
+                    if (node !== checkbox && node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+                        textNodes.push(node);
+                    }
+                });
+                if (textNodes.length > 0) {
+                    const span = document.createElement('span');
+                    span.className = 'task-text';
+                    textNodes[0].parentNode.insertBefore(span, textNodes[0]);
+                    textNodes.forEach(tn => span.appendChild(tn));
+
+                    // Double-click to edit
+                    span.addEventListener('dblclick', (e) => {
+                        e.stopPropagation();
+                        startEditTask(index, span);
+                    });
+                }
+
+                // Add action buttons
+                const actions = document.createElement('div');
+                actions.className = 'task-actions';
+                actions.innerHTML = `
+                    <button class="task-action-btn edit-btn" title="Edit task">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                        </svg>
+                    </button>
+                    <button class="task-action-btn move-up-btn" title="Move up">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                        </svg>
+                    </button>
+                    <button class="task-action-btn move-down-btn" title="Move down">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <button class="task-action-btn delete-btn" title="Delete task">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                `;
+                li.appendChild(actions);
 
                 // Handle checkbox clicks
                 checkbox.addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleTodo(index);
                 });
-            });
 
+                // Handle action button clicks
+                actions.querySelector('.edit-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const textSpan = li.querySelector('.task-text');
+                    if (textSpan) startEditTask(index, textSpan);
+                });
+                actions.querySelector('.move-up-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveTask(index, -1);
+                });
+                actions.querySelector('.move-down-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveTask(index, 1);
+                });
+                actions.querySelector('.delete-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteTask(index);
+                });
+            });
 
             // Update stats
             const total = (todoMarkdown.match(/- \[[ x]\]/gi) || []).length;
@@ -1071,8 +1208,30 @@
             todoStats.textContent = `${completed}/${total} completed`;
         }
 
+        function saveTodoState() {
+            const chat = chats.find(c => c.id === currentSessionId);
+            if (chat) {
+                chat.todoMarkdown = todoMarkdown;
+                saveChats();
+            }
+        }
+
+        function getTaskLines() {
+            return todoMarkdown.split('\n');
+        }
+
+        function getTaskLineIndices() {
+            const lines = getTaskLines();
+            const indices = [];
+            lines.forEach((line, i) => {
+                if (/^- \[[ x]\]/i.test(line)) {
+                    indices.push(i);
+                }
+            });
+            return indices;
+        }
+
         function toggleTodo(index) {
-            // Find and toggle the checkbox in markdown
             let count = 0;
             todoMarkdown = todoMarkdown.replace(/- \[[ x]\]/gi, (match) => {
                 if (count === index) {
@@ -1083,6 +1242,91 @@
                 return match;
             });
             updateTodoDisplay();
+            saveTodoState();
+        }
+
+        function startEditTask(index, textSpan) {
+            const taskIndices = getTaskLineIndices();
+            const lines = getTaskLines();
+            const lineIdx = taskIndices[index];
+            if (lineIdx === undefined) return;
+
+            const line = lines[lineIdx];
+            const taskText = line.replace(/^- \[[ x]\] /i, '');
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'task-edit-input';
+            input.value = taskText;
+
+            const parent = textSpan.parentNode;
+            parent.replaceChild(input, textSpan);
+            input.focus();
+            input.select();
+
+            // Hide action buttons during edit
+            const actions = parent.querySelector('.task-actions');
+            if (actions) actions.style.display = 'none';
+
+            const finishEdit = () => {
+                const newText = input.value.trim();
+                if (newText && newText !== taskText) {
+                    const prefix = line.match(/^- \[[ x]\] /i)[0];
+                    lines[lineIdx] = prefix + newText;
+                    todoMarkdown = lines.join('\n');
+                    saveTodoState();
+                }
+                updateTodoDisplay();
+            };
+
+            input.addEventListener('blur', finishEdit);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    input.removeEventListener('blur', finishEdit);
+                    updateTodoDisplay();
+                }
+            });
+        }
+
+        function deleteTask(index) {
+            const taskIndices = getTaskLineIndices();
+            const lines = getTaskLines();
+            const lineIdx = taskIndices[index];
+            if (lineIdx === undefined) return;
+
+            lines.splice(lineIdx, 1);
+
+            // Clean up empty sections (heading followed by blank or another heading)
+            todoMarkdown = lines.join('\n')
+                .replace(/^(#{1,3} .+)\n+(?=#{1,3} |\s*$)/gm, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            updateTodoDisplay();
+            saveTodoState();
+        }
+
+        function moveTask(index, direction) {
+            const taskIndices = getTaskLineIndices();
+            const targetTaskIdx = index + direction;
+
+            if (targetTaskIdx < 0 || targetTaskIdx >= taskIndices.length) return;
+
+            const lines = getTaskLines();
+            const fromLine = taskIndices[index];
+            const toLine = taskIndices[targetTaskIdx];
+
+            // Swap the two lines
+            const temp = lines[fromLine];
+            lines[fromLine] = lines[toLine];
+            lines[toLine] = temp;
+
+            todoMarkdown = lines.join('\n');
+            updateTodoDisplay();
+            saveTodoState();
         }
 
         // API base URL - use Railway in production, relative URL in development
