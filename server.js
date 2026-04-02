@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
 require('dotenv').config();
@@ -16,8 +18,54 @@ const setAnthropicClient = (client) => {
   anthropic = client;
 };
 
-app.use(cors());
+// Security headers via helmet
+app.use(helmet());
+
+// CORS: restrict to allowed origins (comma-separated in env), default to same-origin only
+const getAllowedOrigins = () => {
+  return process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : [];
+};
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, server-to-server, curl)
+    if (!origin) return callback(null, true);
+    if (getAllowedOrigins().includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  }
+}));
+
 app.use(express.json());
+
+// Rate limiting for API endpoints
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api/', apiLimiter);
+
+// Auth middleware: require API_SECRET_KEY as Bearer token when configured
+const requireAuth = (req, res, next) => {
+  const apiSecretKey = process.env.API_SECRET_KEY;
+  if (!apiSecretKey) return next(); // skip auth if not configured
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== apiSecretKey) {
+    return res.status(401).json({ error: 'Invalid authentication token' });
+  }
+
+  next();
+};
 
 // Serve static files (index.html)
 app.use(express.static(path.join(__dirname)));
@@ -52,7 +100,7 @@ Rules:
 If the user asks to clear tasks or start over, acknowledge it (don't output any task markdown).
 If the user's message isn't about tasks, respond helpfully.`;
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, async (req, res) => {
   const { sessionId, message, currentTasks } = req.body;
 
   if (!sessionId || !message) {
@@ -147,7 +195,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Clear conversation endpoint
-app.post('/api/clear', (req, res) => {
+app.post('/api/clear', requireAuth, (req, res) => {
   const { sessionId } = req.body;
   if (sessionId && conversations[sessionId]) {
     delete conversations[sessionId];
@@ -176,4 +224,4 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT };
+module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT, apiLimiter };
