@@ -354,6 +354,16 @@
             letter-spacing: 0;
         }
 
+        .model-badge {
+            font-size: 0.75rem;
+            color: #666;
+            background: #1a1a1a;
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #252525;
+            white-space: nowrap;
+        }
+
         /* Chat Panel */
         .chat-panel {
             border-right: 1px solid #1f1f1f;
@@ -805,7 +815,8 @@
         <!-- Chat Panel -->
         <div class="chat-panel panel">
             <div class="panel-header">
-                <h1>Chat</h1>
+                <h1 id="chatPanelTitle">Chat</h1>
+                <span class="model-badge" id="modelBadge">Sonnet 4.6</span>
             </div>
             <div class="messages" id="messages">
                 <div class="message assistant">
@@ -860,6 +871,16 @@
         const todoContent = document.getElementById('todoContent');
         const todoStats = document.getElementById('todoStats');
         const chatList = document.getElementById('chatList');
+        const chatPanelTitle = document.getElementById('chatPanelTitle');
+        const modelBadge = document.getElementById('modelBadge');
+
+        function formatModelName(modelId) {
+            if (!modelId) return 'Sonnet 4.6';
+            if (modelId.includes('opus')) return 'Opus 4.6';
+            if (modelId.includes('haiku')) return 'Haiku 4.5';
+            if (modelId.includes('sonnet')) return 'Sonnet 4.6';
+            return modelId;
+        }
         const newChatBtn = document.getElementById('newChatBtn');
         const userBtn = document.getElementById('userBtn');
         const clerkUserButtonDiv = document.getElementById('clerkUserButton');
@@ -1112,6 +1133,7 @@
             saveChats();
             renderChatList();
             resetChatUI();
+            updatePanelTitle();
         }
 
         function switchToChat(chatId) {
@@ -1132,6 +1154,7 @@
                 updateTodoDisplay();
             }
             renderChatList();
+            updatePanelTitle();
         }
 
         function loadChatUI(chat) {
@@ -1165,7 +1188,13 @@
                 chat.name = message.slice(0, 30) + (message.length > 30 ? '...' : '');
                 saveChats();
                 renderChatList();
+                updatePanelTitle();
             }
+        }
+
+        function updatePanelTitle() {
+            const chat = chats.find(c => c.id === currentSessionId);
+            chatPanelTitle.textContent = chat ? chat.name : 'Chat';
         }
 
         function renderChatList() {
@@ -1241,6 +1270,7 @@
                 chat.name = newName.trim();
                 saveChats();
                 renderChatList();
+                updatePanelTitle();
             }
         }
 
@@ -1319,6 +1349,10 @@
 
                 hideTypingIndicator();
 
+                if (data.model) {
+                    modelBadge.textContent = formatModelName(data.model);
+                }
+
                 // Update todo list if response contains tasks
                 if (data.todoMarkdown) {
                     todoMarkdown = data.todoMarkdown;
@@ -1383,6 +1417,7 @@
         // Initialize
         loadChats();
         updateTodoDisplay();
+        updatePanelTitle();
     </script>
 </body>
 </html>

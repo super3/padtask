@@ -123,7 +123,8 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({
       message: chatMessage,
-      todoMarkdown: todoMarkdown || null
+      todoMarkdown: todoMarkdown || null,
+      model: response.model
     });
 
   } catch (error) {
