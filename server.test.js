@@ -19,7 +19,7 @@ jest.mock('@clerk/backend', () => ({
 
 const db = require('./db');
 const { verifyToken } = require('@clerk/backend');
-const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
+const { app, conversations, setAnthropicClient, SYSTEM_PROMPT, apiLimiter } = require('./server');
 
 describe('PadTask Server', () => {
   // Mock Anthropic client
@@ -45,6 +45,8 @@ describe('PadTask Server', () => {
     delete process.env.CLERK_SECRET_KEY;
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
+    // Clear rate limiter state between tests
+    apiLimiter.resetKey('::ffff:127.0.0.1');
   });
 
   describe('SYSTEM_PROMPT', () => {
@@ -69,6 +71,40 @@ describe('PadTask Server', () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('ok');
       expect(response.body.timestamp).toBeDefined();
+    });
+  });
+
+  describe('Security headers', () => {
+    it('should include helmet security headers', async () => {
+      const response = await request(app).get('/health');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
+    });
+  });
+
+  describe('CORS', () => {
+    it('should block requests from disallowed origins', async () => {
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'https://evil.com');
+      expect(response.status).toBe(500);
+    });
+
+    it('should allow requests with no origin (same-origin)', async () => {
+      const response = await request(app).get('/health');
+      expect(response.status).toBe(200);
+    });
+
+    it('should allow requests from allowed origins', async () => {
+      process.env.ALLOWED_ORIGINS = 'https://good.com,https://other.com';
+
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'https://good.com');
+      expect(response.status).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBe('https://good.com');
+
+      delete process.env.ALLOWED_ORIGINS;
     });
   });
 
@@ -260,8 +296,6 @@ describe('PadTask Server', () => {
     });
 
     it('should strip task markdown from assistant message stored in history', async () => {
-      // Regression test: previously stored full assistant response (including
-      // stale task snapshots) caused checked items to revert on the next turn.
       const taskResponse = 'Updated!\n\n## Tasks\n\n- [x] Done item\n- [ ] Other\n\nAll set.';
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: taskResponse }]
@@ -281,7 +315,6 @@ describe('PadTask Server', () => {
     });
 
     it('should load conversation history from database when available', async () => {
-      // Simulate DB returning existing guest history (userId = null)
       db.getConversation.mockResolvedValue({
         messages: [
           { role: 'user', content: 'Previous question' },
@@ -298,13 +331,11 @@ describe('PadTask Server', () => {
         .post('/api/chat')
         .send({ sessionId: 'db-session', message: 'Follow-up question' });
 
-      // Verify DB history was loaded and appended to
       expect(conversations['db-session'].length).toBe(4);
       expect(conversations['db-session'][0].content).toBe('Previous question');
       expect(conversations['db-session'][1].content).toBe('Previous answer');
       expect(conversations['db-session'][2].content).toBe('Follow-up question');
       expect(conversations['db-session'][3].content).toBe('Follow-up response');
-      // Verify DB save was attempted as guest (null userId)
       expect(db.saveConversation).toHaveBeenCalledWith('db-session', expect.any(Array), null);
     });
 
@@ -343,7 +374,6 @@ describe('PadTask Server', () => {
     });
 
     it('should skip token verification when CLERK_SECRET_KEY is not set', async () => {
-      // No CLERK_SECRET_KEY (deleted in beforeEach)
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Response' }]
       });
@@ -373,7 +403,7 @@ describe('PadTask Server', () => {
 
     it('should handle Clerk payload without sub claim as guest', async () => {
       process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
-      verifyToken.mockResolvedValue({}); // payload with no sub
+      verifyToken.mockResolvedValue({});
 
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Response' }]
@@ -412,10 +442,8 @@ describe('PadTask Server', () => {
         .post('/api/chat')
         .send({ sessionId: 'db-error-session', message: 'Hello' });
 
-      // Request still succeeds even though DB write failed
       expect(response.status).toBe(200);
       expect(response.body.message).toBe('Response');
-      // Give the .catch() handler a tick to run
       await new Promise(resolve => setImmediate(resolve));
     });
 
@@ -438,7 +466,6 @@ describe('PadTask Server', () => {
 
   describe('POST /api/clear', () => {
     it('should clear conversation for given sessionId', async () => {
-      // Create a conversation first
       conversations['clear-session'] = [
         { role: 'user', content: 'Hello' },
         { role: 'assistant', content: 'Hi there!' }
