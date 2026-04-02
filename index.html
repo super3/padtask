@@ -492,6 +492,36 @@
             letter-spacing: 0.05em;
             margin-bottom: 16px;
             margin-top: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .todo-content h1::before, .todo-content h2::before, .todo-content h3::before {
+            content: '›';
+            display: inline-block;
+            font-size: 1.1rem;
+            transition: transform 0.2s ease;
+            transform: rotate(90deg);
+            color: #555;
+        }
+
+        .todo-content h1.collapsed::before,
+        .todo-content h2.collapsed::before,
+        .todo-content h3.collapsed::before {
+            transform: rotate(0deg);
+        }
+
+        .todo-content h1.collapsed + ul,
+        .todo-content h2.collapsed + ul,
+        .todo-content h3.collapsed + ul {
+            display: none;
+        }
+
+        .todo-content h1:hover, .todo-content h2:hover, .todo-content h3:hover {
+            color: #aaa;
         }
 
         .todo-content h1:first-child,
@@ -983,6 +1013,19 @@
             // Parse markdown and render
             let html = marked.parse(todoMarkdown);
             todoContent.innerHTML = html;
+
+            // Make category headings collapsible
+            todoContent.querySelectorAll('h1, h2, h3').forEach(heading => {
+                const key = 'padtask-collapsed-' + heading.textContent.trim();
+                if (localStorage.getItem(key) === 'true') {
+                    heading.classList.add('collapsed');
+                }
+                heading.addEventListener('click', () => {
+                    heading.classList.toggle('collapsed');
+                    const isCollapsed = heading.classList.contains('collapsed');
+                    localStorage.setItem(key, isCollapsed);
+                });
+            });
 
             // Enable checkboxes (marked GFM creates them as disabled)
             todoContent.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
