@@ -817,7 +817,7 @@
         <div class="chat-panel panel">
             <div class="panel-header">
                 <h1 id="chatPanelTitle">Chat</h1>
-                <span class="model-badge" id="modelBadge">claude-sonnet-4-20250514</span>
+                <span class="model-badge" id="modelBadge">Sonnet 4.6</span>
             </div>
             <div class="messages" id="messages">
                 <div class="message assistant">
@@ -874,6 +874,14 @@
         const chatList = document.getElementById('chatList');
         const chatPanelTitle = document.getElementById('chatPanelTitle');
         const modelBadge = document.getElementById('modelBadge');
+
+        function formatModelName(modelId) {
+            if (!modelId) return 'Sonnet 4.6';
+            if (modelId.includes('opus')) return 'Opus 4.6';
+            if (modelId.includes('haiku')) return 'Haiku 4.5';
+            if (modelId.includes('sonnet')) return 'Sonnet 4.6';
+            return modelId;
+        }
         const newChatBtn = document.getElementById('newChatBtn');
         const userBtn = document.getElementById('userBtn');
         const clerkUserButtonDiv = document.getElementById('clerkUserButton');
@@ -1343,7 +1351,7 @@
                 hideTypingIndicator();
 
                 if (data.model) {
-                    modelBadge.textContent = data.model;
+                    modelBadge.textContent = formatModelName(data.model);
                 }
 
                 // Update todo list if response contains tasks
