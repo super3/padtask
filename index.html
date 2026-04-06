@@ -1083,6 +1083,11 @@
                 return match;
             });
             updateTodoDisplay();
+            const chat = chats.find(c => c.id === currentSessionId);
+            if (chat) {
+                chat.todoMarkdown = todoMarkdown;
+                saveChats();
+            }
         }
 
         // API base URL - use Railway in production, relative URL in development
