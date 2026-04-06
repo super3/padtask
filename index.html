@@ -876,8 +876,6 @@
 
         function formatModelName(modelId) {
             if (!modelId) return 'Claude Sonnet 4.6';
-            if (modelId.includes('opus')) return 'Claude Opus 4.6';
-            if (modelId.includes('haiku')) return 'Claude Haiku 4.5';
             if (modelId.includes('sonnet')) return 'Claude Sonnet 4.6';
             return modelId;
         }
