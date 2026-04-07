@@ -1095,7 +1095,17 @@
 
         // Chat management functions
         function generateSessionId() {
-            return 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function getChatIdFromUrl() {
+            const hash = window.location.hash;
+            const match = hash.match(/^#\/chat\/(.+)$/);
+            return match ? match[1] : null;
+        }
+
+        function updateUrl(chatId) {
+            history.replaceState(null, '', `#/chat/${chatId}`);
         }
 
         function loadChats() {
@@ -1106,12 +1116,14 @@
             if (chats.length === 0) {
                 createNewChat();
             } else {
-                // Load the most recent chat
-                const chat = chats[0];
+                // Check URL for a specific chat to load
+                const urlChatId = getChatIdFromUrl();
+                const chat = (urlChatId && chats.find(c => c.id === urlChatId)) || chats[0];
                 currentSessionId = chat.id;
                 todoMarkdown = chat.todoMarkdown || '';
                 conversationHistory = chat.messages || [];
                 loadChatUI(chat);
+                updateUrl(chat.id);
             }
             renderChatList();
         }
@@ -1137,6 +1149,7 @@
             renderChatList();
             resetChatUI();
             updatePanelTitle();
+            updateUrl(newId);
         }
 
         function switchToChat(chatId) {
@@ -1155,6 +1168,7 @@
                 conversationHistory = chat.messages || [];
                 loadChatUI(chat);
                 updateTodoDisplay();
+                updateUrl(chatId);
             }
             renderChatList();
             updatePanelTitle();
@@ -1416,6 +1430,14 @@
 
         // New chat button
         newChatBtn.addEventListener('click', createNewChat);
+
+        // Handle browser back/forward navigation
+        window.addEventListener('hashchange', () => {
+            const chatId = getChatIdFromUrl();
+            if (chatId && chatId !== currentSessionId && chats.find(c => c.id === chatId)) {
+                switchToChat(chatId);
+            }
+        });
 
         // Initialize
         loadChats();
