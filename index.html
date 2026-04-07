@@ -1101,7 +1101,10 @@
         function getChatIdFromUrl() {
             const hash = window.location.hash;
             const match = hash.match(/^#\/chat\/(.+)$/);
-            return match ? match[1] : null;
+            if (!match) return null;
+            // Strip "session-" prefix from old bookmarked URLs
+            const id = match[1];
+            return id.startsWith('session-') ? id.slice('session-'.length) : id;
         }
 
         function updateUrl(chatId) {
@@ -1112,6 +1115,17 @@
             const saved = localStorage.getItem('padtask-chats');
             if (saved) {
                 chats = JSON.parse(saved);
+                // Migrate: strip "session-" prefix from existing chat IDs
+                let migrated = false;
+                chats.forEach(chat => {
+                    if (chat.id && chat.id.startsWith('session-')) {
+                        chat.id = chat.id.slice('session-'.length);
+                        migrated = true;
+                    }
+                });
+                if (migrated) {
+                    localStorage.setItem('padtask-chats', JSON.stringify(chats));
+                }
             }
             if (chats.length === 0) {
                 createNewChat();
