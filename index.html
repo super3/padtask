@@ -479,6 +479,35 @@
             background: #0f0f0f;
         }
 
+        .todo-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .copy-tasks-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .copy-tasks-btn:hover {
+            background: #252525;
+            color: #999;
+        }
+
+        .copy-tasks-btn.copied {
+            color: #22c55e;
+        }
+
         .todo-stats {
             font-size: 0.75rem;
             color: #666;
@@ -845,7 +874,15 @@
         <div class="todo-panel panel">
             <div class="panel-header">
                 <h2>Tasks</h2>
-                <span class="todo-stats" id="todoStats">0 tasks</span>
+                <div class="todo-header-actions">
+                    <button class="copy-tasks-btn" id="copyTasksBtn" title="Copy tasks as markdown" onclick="copyTasksMarkdown()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                    <span class="todo-stats" id="todoStats">0 tasks</span>
+                </div>
             </div>
             <div class="todo-content" id="todoContent">
                 <div class="empty-state">
@@ -873,6 +910,22 @@
         const chatList = document.getElementById('chatList');
         const chatPanelTitle = document.getElementById('chatPanelTitle');
         const modelBadge = document.getElementById('modelBadge');
+
+        async function copyTasksMarkdown() {
+            if (!todoMarkdown) return;
+            try {
+                await navigator.clipboard.writeText(todoMarkdown);
+                const btn = document.getElementById('copyTasksBtn');
+                btn.classList.add('copied');
+                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy tasks:', err);
+            }
+        }
 
         function formatModelName(modelId) {
             if (!modelId) return 'Claude Sonnet 4.6';
