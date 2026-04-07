@@ -37,7 +37,9 @@ describe('Frontend URL Routing', () => {
         getChatIdFromUrl = function() {
             const hash = window.location.hash;
             const match = hash.match(/^#\/chat\/(.+)$/);
-            return match ? match[1] : null;
+            if (!match) return null;
+            const id = match[1];
+            return id.startsWith('session-') ? id.slice('session-'.length) : id;
         };
 
         updateUrl = function(chatId) {
@@ -58,6 +60,17 @@ describe('Frontend URL Routing', () => {
             const saved = localStorage.getItem('padtask-chats');
             if (saved) {
                 chats = JSON.parse(saved);
+                // Migrate: strip "session-" prefix from existing chat IDs
+                let migrated = false;
+                chats.forEach(chat => {
+                    if (chat.id && chat.id.startsWith('session-')) {
+                        chat.id = chat.id.slice('session-'.length);
+                        migrated = true;
+                    }
+                });
+                if (migrated) {
+                    localStorage.setItem('padtask-chats', JSON.stringify(chats));
+                }
             }
             if (chats.length === 0) {
                 createNewChat();
@@ -133,6 +146,11 @@ describe('Frontend URL Routing', () => {
             window.location.hash = '#/chat/chat-1712428800000-abc123xyz';
             expect(getChatIdFromUrl()).toBe('chat-1712428800000-abc123xyz');
         });
+
+        it('should strip session- prefix from old bookmarked URLs', () => {
+            window.location.hash = '#/chat/session-1767110758398-zetp3mf4a';
+            expect(getChatIdFromUrl()).toBe('1767110758398-zetp3mf4a');
+        });
     });
 
     describe('updateUrl', () => {
@@ -196,6 +214,31 @@ describe('Frontend URL Routing', () => {
 
             loadChats();
             expect(window.location.hash).toBe('#/chat/chat-abc');
+        });
+
+        it('should migrate chat IDs by stripping session- prefix', () => {
+            const chat1 = { id: 'session-1767110758398-zetp3mf4a', name: 'Chat 1', todoMarkdown: '', messages: [] };
+            const chat2 = { id: '1767110758399-abc123', name: 'Chat 2', todoMarkdown: '', messages: [] };
+            localStorage.setItem('padtask-chats', JSON.stringify([chat1, chat2]));
+
+            loadChats();
+
+            expect(chats[0].id).toBe('1767110758398-zetp3mf4a');
+            expect(chats[1].id).toBe('1767110758399-abc123');
+            // Verify localStorage was updated
+            const saved = JSON.parse(localStorage.getItem('padtask-chats'));
+            expect(saved[0].id).toBe('1767110758398-zetp3mf4a');
+        });
+
+        it('should load chat from URL with session- prefix after migration', () => {
+            const chat = { id: 'session-123-abc', name: 'Chat 1', todoMarkdown: '## Tasks', messages: [] };
+            localStorage.setItem('padtask-chats', JSON.stringify([chat]));
+            window.location.hash = '#/chat/session-123-abc';
+
+            loadChats();
+
+            expect(currentSessionId).toBe('123-abc');
+            expect(todoMarkdown).toBe('## Tasks');
         });
     });
 
