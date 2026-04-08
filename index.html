@@ -1106,6 +1106,18 @@
             let html = marked.parse(todoMarkdown, { renderer });
             todoContent.innerHTML = html;
 
+            // Wrap text after checkbox in a span so links don't become separate flex items
+            todoContent.querySelectorAll('li').forEach(li => {
+                const checkbox = li.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    const span = document.createElement('span');
+                    while (checkbox.nextSibling) {
+                        span.appendChild(checkbox.nextSibling);
+                    }
+                    li.appendChild(span);
+                }
+            });
+
             // Make category headings collapsible
             todoContent.querySelectorAll('h1, h2, h3').forEach(heading => {
                 const key = 'padtask-collapsed-' + heading.textContent.trim();
