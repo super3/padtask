@@ -399,6 +399,99 @@
             color: #e0e0e0;
         }
 
+        .message .quoted-task {
+            border-left: 3px solid #2563eb;
+            padding: 4px 10px;
+            margin-bottom: 8px;
+            color: #888;
+            font-size: 0.8125rem;
+            background: rgba(37, 99, 235, 0.05);
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* Quote reply preview */
+        .quote-preview {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 0 18px;
+            background: #0a0a0a;
+        }
+
+        .quote-preview.active {
+            display: flex;
+        }
+
+        .quote-preview-bar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #151515;
+            border-left: 3px solid #2563eb;
+            border-radius: 0 8px 8px 0;
+            padding: 8px 12px;
+            min-width: 0;
+        }
+
+        .quote-preview-label {
+            color: #2563eb;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .quote-preview-text {
+            color: #999;
+            font-size: 0.8125rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .quote-preview-dismiss {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+
+        .quote-preview-dismiss:hover {
+            background: #252525;
+            color: #999;
+        }
+
+        /* Todo item quote affordance */
+        .todo-content li {
+            cursor: pointer;
+        }
+
+        .todo-content li .quote-hint {
+            display: none;
+            align-items: center;
+            margin-left: auto;
+            color: #444;
+            flex-shrink: 0;
+            transition: color 0.15s;
+        }
+
+        .todo-content li:hover .quote-hint {
+            display: flex;
+        }
+
+        .todo-content li.quote-active {
+            border-color: #2563eb;
+            background: #111827;
+        }
+
         .chat-input-container {
             padding: 20px 24px 24px;
             background: #0a0a0a;
@@ -853,6 +946,18 @@
                 </div>
             </div>
             <div class="chat-input-container">
+                <div class="quote-preview" id="quotePreview">
+                    <div class="quote-preview-bar">
+                        <span class="quote-preview-label">Task</span>
+                        <span class="quote-preview-text" id="quotePreviewText"></span>
+                    </div>
+                    <button class="quote-preview-dismiss" id="quotePreviewDismiss" title="Remove quote">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
                 <div class="chat-input-wrapper">
                     <textarea
                         class="chat-input"
@@ -900,6 +1005,7 @@
         let conversationHistory = [];
         let currentSessionId = null;
         let chats = []; // Array of { id, name, todoMarkdown }
+        let quotedTask = null; // Text of the currently quoted task
 
         // DOM Elements
         const messagesContainer = document.getElementById('messages');
@@ -910,6 +1016,9 @@
         const chatList = document.getElementById('chatList');
         const chatPanelTitle = document.getElementById('chatPanelTitle');
         const modelBadge = document.getElementById('modelBadge');
+        const quotePreview = document.getElementById('quotePreview');
+        const quotePreviewText = document.getElementById('quotePreviewText');
+        const quotePreviewDismiss = document.getElementById('quotePreviewDismiss');
 
         async function copyTasksMarkdown() {
             if (!todoMarkdown) return;
@@ -1047,10 +1156,39 @@
 
         sendBtn.addEventListener('click', sendMessage);
 
+        // Quote task functions
+        function setQuotedTask(taskText) {
+            quotedTask = taskText;
+            quotePreviewText.textContent = taskText;
+            quotePreview.classList.add('active');
+            chatInput.focus();
+        }
+
+        function clearQuotedTask() {
+            quotedTask = null;
+            quotePreviewText.textContent = '';
+            quotePreview.classList.remove('active');
+        }
+
+        quotePreviewDismiss.addEventListener('click', clearQuotedTask);
+
         function addMessage(content, role) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
-            messageDiv.textContent = content;
+
+            // Check if the message starts with a quote ("> text\n\n")
+            const quoteMatch = content.match(/^> (.+?)\n\n([\s\S]*)$/);
+            if (quoteMatch) {
+                const quoteDiv = document.createElement('div');
+                quoteDiv.className = 'quoted-task';
+                quoteDiv.textContent = quoteMatch[1];
+                messageDiv.appendChild(quoteDiv);
+                const bodyText = document.createTextNode(quoteMatch[2]);
+                messageDiv.appendChild(bodyText);
+            } else {
+                messageDiv.textContent = content;
+            }
+
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -1113,8 +1251,31 @@
                     e.stopPropagation();
                     toggleTodo(index);
                 });
-            });
 
+                // Add quote hint and click-to-quote on li
+                const li = checkbox.closest('li');
+                if (li) {
+                    const hint = document.createElement('span');
+                    hint.className = 'quote-hint';
+                    hint.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>';
+                    hint.title = 'Quote in chat';
+                    li.appendChild(hint);
+
+                    li.addEventListener('click', (e) => {
+                        // Don't quote when clicking the checkbox
+                        if (e.target.tagName === 'INPUT') return;
+                        // Get the task text (without the checkbox)
+                        const span = li.querySelector('span') || li;
+                        const text = span.textContent.trim();
+                        if (text) {
+                            // Briefly highlight the item
+                            li.classList.add('quote-active');
+                            setTimeout(() => li.classList.remove('quote-active'), 300);
+                            setQuotedTask(text);
+                        }
+                    });
+                }
+            });
 
             // Update stats
             const total = (todoMarkdown.match(/- \[[ x]\]/gi) || []).length;
@@ -1229,6 +1390,7 @@
 
             // Switch to new chat
             currentSessionId = chatId;
+            clearQuotedTask();
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
                 todoMarkdown = chat.todoMarkdown || '';
@@ -1392,10 +1554,17 @@
 
         async function sendMessage() {
             const message = chatInput.value.trim();
-            if (!message) return;
+            if (!message && !quotedTask) return;
+
+            // Build the full message with optional quote
+            let fullMessage = message;
+            if (quotedTask) {
+                fullMessage = `> ${quotedTask}\n\n${message}`;
+            }
 
             // Add user message
-            addMessage(message, 'user');
+            addMessage(fullMessage, 'user');
+            clearQuotedTask();
             chatInput.value = '';
             chatInput.style.height = 'auto';
 
@@ -1405,7 +1574,7 @@
             showTypingIndicator();
 
             // Add to conversation history and save
-            conversationHistory.push({ role: 'user', content: message });
+            conversationHistory.push({ role: 'user', content: fullMessage });
             const chat = chats.find(c => c.id === currentSessionId);
             if (chat) {
                 chat.messages = conversationHistory;
@@ -1420,7 +1589,7 @@
                     },
                     body: JSON.stringify({
                         sessionId: getSessionId(),
-                        message: message,
+                        message: fullMessage,
                         currentTasks: todoMarkdown || ''
                     })
                 });
