@@ -1264,9 +1264,14 @@
                     li.addEventListener('click', (e) => {
                         // Don't quote when clicking the checkbox
                         if (e.target.tagName === 'INPUT') return;
-                        // Get the task text (without the checkbox)
-                        const span = li.querySelector('span') || li;
-                        const text = span.textContent.trim();
+                        // Get the task text from text nodes (skip checkbox and hint elements)
+                        let text = '';
+                        li.childNodes.forEach(node => {
+                            if (node.nodeType === Node.TEXT_NODE) {
+                                text += node.textContent;
+                            }
+                        });
+                        text = text.trim();
                         if (text) {
                             // Briefly highlight the item
                             li.classList.add('quote-active');
