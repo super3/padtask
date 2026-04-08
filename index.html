@@ -643,6 +643,22 @@
             opacity: 0.7;
         }
 
+        .todo-content a {
+            color: #5b9bf5;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .todo-content a:hover {
+            color: #7db4fc;
+            border-bottom-color: #7db4fc;
+        }
+
+        .todo-content li.checked a {
+            color: #555;
+        }
+
         .todo-content p {
             color: #666;
             margin-bottom: 16px;
@@ -1083,7 +1099,11 @@
             }
 
             // Parse markdown and render
-            let html = marked.parse(todoMarkdown);
+            const renderer = new marked.Renderer();
+            renderer.link = function(token) {
+                return `<a href="${token.href}" target="_blank" rel="noopener noreferrer">${token.text}</a>`;
+            };
+            let html = marked.parse(todoMarkdown, { renderer });
             todoContent.innerHTML = html;
 
             // Make category headings collapsible
