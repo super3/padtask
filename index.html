@@ -382,7 +382,6 @@
             padding: 8px 0;
             line-height: 1.6;
             font-size: 0.9375rem;
-            white-space: pre-wrap;
         }
 
         .message.user {
@@ -1180,6 +1179,16 @@
 
         quotePreviewDismiss.addEventListener('click', clearQuotedTask);
 
+        function appendTextWithBreaks(parent, text) {
+            const lines = text.split('\n');
+            lines.forEach((line, i) => {
+                parent.appendChild(document.createTextNode(line));
+                if (i < lines.length - 1) {
+                    parent.appendChild(document.createElement('br'));
+                }
+            });
+        }
+
         function addMessage(content, role) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -1191,10 +1200,9 @@
                 quoteDiv.className = 'quoted-task';
                 quoteDiv.textContent = quoteMatch[1];
                 messageDiv.appendChild(quoteDiv);
-                const bodyText = document.createTextNode(quoteMatch[2]);
-                messageDiv.appendChild(bodyText);
+                appendTextWithBreaks(messageDiv, quoteMatch[2]);
             } else {
-                messageDiv.textContent = content;
+                appendTextWithBreaks(messageDiv, content);
             }
 
             messagesContainer.appendChild(messageDiv);
