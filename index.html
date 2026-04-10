@@ -1179,16 +1179,6 @@
 
         quotePreviewDismiss.addEventListener('click', clearQuotedTask);
 
-        function appendTextWithBreaks(parent, text) {
-            const lines = text.split('\n');
-            lines.forEach((line, i) => {
-                parent.appendChild(document.createTextNode(line));
-                if (i < lines.length - 1) {
-                    parent.appendChild(document.createElement('br'));
-                }
-            });
-        }
-
         function addMessage(content, role) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -1200,9 +1190,10 @@
                 quoteDiv.className = 'quoted-task';
                 quoteDiv.textContent = quoteMatch[1];
                 messageDiv.appendChild(quoteDiv);
-                appendTextWithBreaks(messageDiv, quoteMatch[2]);
+                const bodyText = document.createTextNode(quoteMatch[2]);
+                messageDiv.appendChild(bodyText);
             } else {
-                appendTextWithBreaks(messageDiv, content);
+                messageDiv.textContent = content;
             }
 
             messagesContainer.appendChild(messageDiv);

@@ -103,14 +103,12 @@ app.post('/api/chat', async (req, res) => {
     let todoMarkdown = '';
     let chatMessage = assistantMessage;
 
-    // Match sections with checkbox items, including multi-line content
-    // (indented continuation lines, blank lines between items).
-    // Stops at the next ## heading or a non-matching line.
+    // Match all sections that contain checkbox items (1-2 newlines after heading)
     const sections = [];
-    const sectionRegex = /## .+\n\n?(?:(?:- \[[ x]\] .+|  .+|[ \t]*)(?:\n|$))+/gi;
+    const sectionRegex = /## .+\n\n?(?:- \[[ x]\] .+\n?)+/gi;
     let match;
     while ((match = sectionRegex.exec(assistantMessage)) !== null) {
-      sections.push(match[0].trimEnd());
+      sections.push(match[0]);
     }
 
     if (sections.length > 0) {
@@ -120,7 +118,7 @@ app.post('/api/chat', async (req, res) => {
       sections.forEach(section => {
         chatMessage = chatMessage.replace(section, '');
       });
-      chatMessage = chatMessage.replace(/\n{3,}/g, '\n\n').trim();
+      chatMessage = chatMessage.trim();
     }
 
     res.json({
