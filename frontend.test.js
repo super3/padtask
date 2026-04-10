@@ -314,7 +314,7 @@ describe('Frontend URL Routing', () => {
 describe('Click-to-quote task text extraction', () => {
     // Mirrors the extraction logic in updateTodoDisplay's li click handler in
     // index.html. The li structure at click time is:
-    //   <li><input type="checkbox"><span>task text <a>link</a></span><span class="quote-hint">...</span></li>
+    //   <li><input type="checkbox"><span>task text <a>link</a></span></li>
     // Previously the handler iterated only TEXT_NODE children of the li, which
     // broke when task text was moved into a wrapper span for link layout fix.
     function extractTaskText(li) {
@@ -324,8 +324,7 @@ describe('Click-to-quote task text extraction', () => {
                 text += node.textContent;
             } else if (
                 node.nodeType === Node.ELEMENT_NODE &&
-                node.tagName !== 'INPUT' &&
-                !node.classList.contains('quote-hint')
+                node.tagName !== 'INPUT'
             ) {
                 text += node.textContent;
             }
@@ -346,11 +345,6 @@ describe('Click-to-quote task text extraction', () => {
             }
             li.appendChild(span);
         }
-        // Append the quote-hint span (same as updateTodoDisplay)
-        const hint = document.createElement('span');
-        hint.className = 'quote-hint';
-        hint.textContent = 'hint-icon';
-        li.appendChild(hint);
         return li;
     }
 
@@ -364,21 +358,11 @@ describe('Click-to-quote task text extraction', () => {
         expect(extractTaskText(li)).toBe('Read docs today');
     });
 
-    it('ignores the quote-hint icon content', () => {
-        const li = buildLi('<input type="checkbox"> Ship the fix');
-        expect(extractTaskText(li)).not.toContain('hint-icon');
-        expect(extractTaskText(li)).toBe('Ship the fix');
-    });
-
     it('still works when text is a direct text node of the li (no wrapper)', () => {
         // Simulate an li that was never wrapped (defensive path)
         const container = document.createElement('ul');
         container.innerHTML = '<li><input type="checkbox"> Legacy task</li>';
         const li = container.querySelector('li');
-        const hint = document.createElement('span');
-        hint.className = 'quote-hint';
-        hint.textContent = 'hint-icon';
-        li.appendChild(hint);
         expect(extractTaskText(li)).toBe('Legacy task');
     });
 
@@ -386,10 +370,6 @@ describe('Click-to-quote task text extraction', () => {
         const container = document.createElement('ul');
         container.innerHTML = '<li><input type="checkbox"></li>';
         const li = container.querySelector('li');
-        const hint = document.createElement('span');
-        hint.className = 'quote-hint';
-        hint.textContent = 'hint-icon';
-        li.appendChild(hint);
         expect(extractTaskText(li)).toBe('');
     });
 });

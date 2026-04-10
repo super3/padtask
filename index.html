@@ -473,19 +473,6 @@
             cursor: pointer;
         }
 
-        .todo-content li .quote-hint {
-            display: none;
-            align-items: center;
-            margin-left: auto;
-            color: #444;
-            flex-shrink: 0;
-            transition: color 0.15s;
-        }
-
-        .todo-content li:hover .quote-hint {
-            display: flex;
-        }
-
         .todo-content li.quote-active {
             border-color: #2563eb;
             background: #111827;
@@ -690,7 +677,6 @@
         .todo-content li:hover {
             background: #1a1a1a;
             border-color: #2a2a2a;
-            transform: translateX(2px);
         }
 
         .todo-content input[type="checkbox"] {
@@ -1291,30 +1277,23 @@
                     toggleTodo(index);
                 });
 
-                // Add quote hint and click-to-quote on li
+                // Click-to-quote on li
                 const li = checkbox.closest('li');
                 if (li) {
-                    const hint = document.createElement('span');
-                    hint.className = 'quote-hint';
-                    hint.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>';
-                    hint.title = 'Quote in chat';
-                    li.appendChild(hint);
-
                     li.addEventListener('click', (e) => {
                         // Don't quote when clicking the checkbox
                         if (e.target.tagName === 'INPUT') return;
                         // Get the task text from li's children, skipping the
-                        // checkbox and the quote-hint icon. The task text lives
-                        // inside the wrapper span added above (or directly as
-                        // text nodes if no wrapper exists).
+                        // checkbox. The task text lives inside the wrapper
+                        // span added above (or directly as text nodes if no
+                        // wrapper exists).
                         let text = '';
                         li.childNodes.forEach(node => {
                             if (node.nodeType === Node.TEXT_NODE) {
                                 text += node.textContent;
                             } else if (
                                 node.nodeType === Node.ELEMENT_NODE &&
-                                node.tagName !== 'INPUT' &&
-                                !node.classList.contains('quote-hint')
+                                node.tagName !== 'INPUT'
                             ) {
                                 text += node.textContent;
                             }
