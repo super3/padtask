@@ -310,3 +310,86 @@ describe('Frontend URL Routing', () => {
         });
     });
 });
+
+describe('Click-to-quote task text extraction', () => {
+    // Mirrors the extraction logic in updateTodoDisplay's li click handler in
+    // index.html. The li structure at click time is:
+    //   <li><input type="checkbox"><span>task text <a>link</a></span><span class="quote-hint">...</span></li>
+    // Previously the handler iterated only TEXT_NODE children of the li, which
+    // broke when task text was moved into a wrapper span for link layout fix.
+    function extractTaskText(li) {
+        let text = '';
+        li.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                text += node.textContent;
+            } else if (
+                node.nodeType === Node.ELEMENT_NODE &&
+                node.tagName !== 'INPUT' &&
+                !node.classList.contains('quote-hint')
+            ) {
+                text += node.textContent;
+            }
+        });
+        return text.trim();
+    }
+
+    function buildLi(innerHTML) {
+        const container = document.createElement('ul');
+        container.innerHTML = `<li>${innerHTML}</li>`;
+        const li = container.querySelector('li');
+        // Apply the same wrap-after-checkbox transform as updateTodoDisplay
+        const checkbox = li.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            const span = document.createElement('span');
+            while (checkbox.nextSibling) {
+                span.appendChild(checkbox.nextSibling);
+            }
+            li.appendChild(span);
+        }
+        // Append the quote-hint span (same as updateTodoDisplay)
+        const hint = document.createElement('span');
+        hint.className = 'quote-hint';
+        hint.textContent = 'hint-icon';
+        li.appendChild(hint);
+        return li;
+    }
+
+    it('extracts plain task text from a wrapper span', () => {
+        const li = buildLi('<input type="checkbox"> Buy milk');
+        expect(extractTaskText(li)).toBe('Buy milk');
+    });
+
+    it('extracts task text that includes a rendered link', () => {
+        const li = buildLi('<input type="checkbox"> Read <a href="https://example.com">docs</a> today');
+        expect(extractTaskText(li)).toBe('Read docs today');
+    });
+
+    it('ignores the quote-hint icon content', () => {
+        const li = buildLi('<input type="checkbox"> Ship the fix');
+        expect(extractTaskText(li)).not.toContain('hint-icon');
+        expect(extractTaskText(li)).toBe('Ship the fix');
+    });
+
+    it('still works when text is a direct text node of the li (no wrapper)', () => {
+        // Simulate an li that was never wrapped (defensive path)
+        const container = document.createElement('ul');
+        container.innerHTML = '<li><input type="checkbox"> Legacy task</li>';
+        const li = container.querySelector('li');
+        const hint = document.createElement('span');
+        hint.className = 'quote-hint';
+        hint.textContent = 'hint-icon';
+        li.appendChild(hint);
+        expect(extractTaskText(li)).toBe('Legacy task');
+    });
+
+    it('returns empty string for an li with no task text', () => {
+        const container = document.createElement('ul');
+        container.innerHTML = '<li><input type="checkbox"></li>';
+        const li = container.querySelector('li');
+        const hint = document.createElement('span');
+        hint.className = 'quote-hint';
+        hint.textContent = 'hint-icon';
+        li.appendChild(hint);
+        expect(extractTaskText(li)).toBe('');
+    });
+});
