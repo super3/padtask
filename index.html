@@ -1303,10 +1303,19 @@
                     li.addEventListener('click', (e) => {
                         // Don't quote when clicking the checkbox
                         if (e.target.tagName === 'INPUT') return;
-                        // Get the task text from text nodes (skip checkbox and hint elements)
+                        // Get the task text from li's children, skipping the
+                        // checkbox and the quote-hint icon. The task text lives
+                        // inside the wrapper span added above (or directly as
+                        // text nodes if no wrapper exists).
                         let text = '';
                         li.childNodes.forEach(node => {
                             if (node.nodeType === Node.TEXT_NODE) {
+                                text += node.textContent;
+                            } else if (
+                                node.nodeType === Node.ELEMENT_NODE &&
+                                node.tagName !== 'INPUT' &&
+                                !node.classList.contains('quote-hint')
+                            ) {
                                 text += node.textContent;
                             }
                         });
