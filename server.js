@@ -19,7 +19,38 @@ const setAnthropicClient = (client) => {
 };
 
 // Security headers via helmet
-app.use(helmet());
+// Configure CSP to allow the frontend's external scripts (jsdelivr, Clerk) and inline scripts/styles
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://*.clerk.accounts.dev",
+        "https://*.clerk.com"
+      ],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://*.clerk.accounts.dev",
+        "https://*.clerk.com"
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https://*.clerk.com", "https://img.clerk.com"],
+      connectSrc: [
+        "'self'",
+        "https://*.clerk.accounts.dev",
+        "https://clerk-telemetry.com",
+        "https://padtask-production.up.railway.app"
+      ],
+      workerSrc: ["'self'", "blob:"],
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"]
+    }
+  }
+}));
 
 // CORS: restrict to allowed origins (comma-separated in env), default to same-origin only
 const getAllowedOrigins = () => {
