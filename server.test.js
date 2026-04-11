@@ -10,6 +10,7 @@ jest.mock('./db', () => ({
   setPool: jest.fn()
 }));
 
+const db = require('./db');
 const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {
@@ -24,8 +25,11 @@ describe('PadTask Server', () => {
   beforeEach(() => {
     // Clear conversations before each test
     Object.keys(conversations).forEach(key => delete conversations[key]);
-    // Reset mock
+    // Reset mocks
     mockCreate.mockReset();
+    db.getConversation.mockReset().mockResolvedValue(null);
+    db.saveConversation.mockReset().mockResolvedValue(false);
+    db.deleteConversation.mockReset().mockResolvedValue(false);
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
   });
@@ -263,6 +267,48 @@ describe('PadTask Server', () => {
       expect(stored.content).toContain('All set.');
     });
 
+    it('should load conversation history from database when available', async () => {
+      // Simulate DB returning existing history
+      db.getConversation.mockResolvedValue([
+        { role: 'user', content: 'Previous question' },
+        { role: 'assistant', content: 'Previous answer' }
+      ]);
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Follow-up response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'db-session', message: 'Follow-up question' });
+
+      // Verify DB history was loaded and appended to
+      expect(conversations['db-session'].length).toBe(4);
+      expect(conversations['db-session'][0].content).toBe('Previous question');
+      expect(conversations['db-session'][1].content).toBe('Previous answer');
+      expect(conversations['db-session'][2].content).toBe('Follow-up question');
+      expect(conversations['db-session'][3].content).toBe('Follow-up response');
+      // Verify DB save was attempted
+      expect(db.saveConversation).toHaveBeenCalledWith('db-session', expect.any(Array));
+    });
+
+    it('should swallow database save errors without failing the request', async () => {
+      db.saveConversation.mockRejectedValue(new Error('DB write failed'));
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'db-error-session', message: 'Hello' });
+
+      // Request still succeeds even though DB write failed
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Response');
+      // Give the .catch() handler a tick to run
+      await new Promise(resolve => setImmediate(resolve));
+    });
+
     it('should include currentTasks in system prompt when provided', async () => {
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Updated tasks!' }]
@@ -313,6 +359,18 @@ describe('PadTask Server', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+    });
+
+    it('should swallow database delete errors', async () => {
+      db.deleteConversation.mockRejectedValue(new Error('DB delete failed'));
+
+      const response = await request(app)
+        .post('/api/clear')
+        .send({ sessionId: 'db-error-clear' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(db.deleteConversation).toHaveBeenCalledWith('db-error-clear');
     });
   });
 });

@@ -1,3 +1,4 @@
+const path = require('path');
 const { Pool } = require('pg');
 
 let pool = null;
@@ -13,16 +14,22 @@ function getPool() {
 }
 
 async function initDatabase() {
-  const p = getPool();
-  if (!p) return false;
+  if (!process.env.DATABASE_URL) return false;
 
-  await p.query(`
-    CREATE TABLE IF NOT EXISTS conversations (
-      session_id TEXT PRIMARY KEY,
-      messages JSONB NOT NULL DEFAULT '[]',
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
+  // Run migrations programmatically so Railway deploys auto-migrate
+  const runner = require('node-pg-migrate').default;
+  await runner({
+    databaseUrl: process.env.DATABASE_URL,
+    dir: path.join(__dirname, 'migrations'),
+    migrationsTable: 'pgmigrations',
+    direction: 'up',
+    count: Infinity,
+    log: () => {}
+  });
+
+  // Verify connectivity on the shared pool
+  const p = getPool();
+  await p.query('SELECT 1');
   return true;
 }
 
