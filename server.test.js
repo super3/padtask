@@ -231,6 +231,27 @@ describe('PadTask Server', () => {
       );
     });
 
+    it('should strip task markdown from assistant message stored in history', async () => {
+      // Regression test: previously stored full assistant response (including
+      // stale task snapshots) caused checked items to revert on the next turn.
+      const taskResponse = 'Updated!\n\n## Tasks\n\n- [x] Done item\n- [ ] Other\n\nAll set.';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: taskResponse }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'strip-session', message: 'mark as done' });
+
+      const stored = conversations['strip-session'][1];
+      expect(stored.role).toBe('assistant');
+      expect(stored.content).not.toContain('## Tasks');
+      expect(stored.content).not.toContain('- [x]');
+      expect(stored.content).not.toContain('- [ ]');
+      expect(stored.content).toContain('Updated!');
+      expect(stored.content).toContain('All set.');
+    });
+
     it('should include currentTasks in system prompt when provided', async () => {
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Updated tasks!' }]

@@ -75,6 +75,26 @@ app.post('/api/chat', async (req, res) => {
     conversations[sessionId] = conversations[sessionId].slice(-20);
   }
 
+  // Extract task sections from a markdown string
+  const extractTaskSections = (text) => {
+    const regex = /## .+\n\n?(?:- \[[ x]\] .+\n?)+/gi;
+    const sections = [];
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      sections.push(m[0]);
+    }
+    return sections;
+  };
+
+  // Strip task sections from a markdown string
+  const stripTaskSections = (text, sections) => {
+    let stripped = text;
+    sections.forEach(section => {
+      stripped = stripped.replace(section, '');
+    });
+    return stripped.trim();
+  };
+
   // Build system prompt with current tasks context
   let systemPrompt = SYSTEM_PROMPT;
   if (currentTasks && currentTasks.trim()) {
@@ -93,33 +113,26 @@ app.post('/api/chat', async (req, res) => {
       ? response.content[0].text
       : '';
 
-    // Add assistant message to history
-    conversations[sessionId].push({
-      role: 'assistant',
-      content: assistantMessage
-    });
-
     // Extract todo markdown from response (all sections with checkboxes)
     let todoMarkdown = '';
     let chatMessage = assistantMessage;
 
-    // Match all sections that contain checkbox items (1-2 newlines after heading)
-    const sections = [];
-    const sectionRegex = /## .+\n\n?(?:- \[[ x]\] .+\n?)+/gi;
-    let match;
-    while ((match = sectionRegex.exec(assistantMessage)) !== null) {
-      sections.push(match[0]);
-    }
+    const sections = extractTaskSections(assistantMessage);
 
     if (sections.length > 0) {
       todoMarkdown = sections.join('\n');
       // Strip all task sections from chat message
-      chatMessage = assistantMessage;
-      sections.forEach(section => {
-        chatMessage = chatMessage.replace(section, '');
-      });
-      chatMessage = chatMessage.trim();
+      chatMessage = stripTaskSections(assistantMessage, sections);
     }
+
+    // Store assistant message in history WITHOUT task markdown. The authoritative
+    // task state is passed fresh via the system prompt's CURRENT TASK LIST on each
+    // request, so keeping stale task snapshots in history causes the model to
+    // revert user-side edits (like unchecking items the user had just checked).
+    conversations[sessionId].push({
+      role: 'assistant',
+      content: chatMessage || assistantMessage
+    });
 
     res.json({
       message: chatMessage,
