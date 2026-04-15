@@ -32,6 +32,20 @@ app.get('/health', (req, res) => {
 // In-memory fallback when DATABASE_URL is not set
 const conversations = {};
 
+// Ownership rule: guest rows (user_id=NULL) are open to anyone who knows the
+// (unguessable) sessionId. Owned rows only allow requests from the same user.
+function canAccess(rowUserId, reqUserId) {
+  return rowUserId === null || rowUserId === reqUserId;
+}
+
+// Reject unauthenticated requests — used on user-scoped endpoints
+function requireAuth(req, res, next) {
+  if (!req.userId) {
+    return res.status(401).json({ error: 'authentication required' });
+  }
+  next();
+}
+
 const SYSTEM_PROMPT = `You are a helpful task organizer assistant for PadTask. Your job is to help users organize their tasks and todos.
 
 IMPORTANT: When a user provides tasks or asks you to add/modify tasks, you MUST output the complete updated task list in markdown format. This is how tasks get saved to the system.
@@ -62,10 +76,14 @@ app.post('/api/chat', clerkAuth, async (req, res) => {
   }
 
   // Load conversation from DB or fall back to in-memory
-  let history = await db.getConversation(sessionId);
-  if (history !== null) {
+  const row = await db.getConversation(sessionId);
+  if (row !== null) {
+    // Enforce ownership: owned rows are only accessible to the owner
+    if (!canAccess(row.userId, req.userId)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     // DB is available — sync to in-memory for consistent access
-    conversations[sessionId] = history;
+    conversations[sessionId] = row.messages;
   } else if (!conversations[sessionId]) {
     conversations[sessionId] = [];
   }
@@ -160,10 +178,31 @@ app.post('/api/chat', clerkAuth, async (req, res) => {
 app.post('/api/clear', clerkAuth, async (req, res) => {
   const { sessionId } = req.body;
   if (sessionId) {
+    const row = await db.getConversation(sessionId);
+    if (row !== null && !canAccess(row.userId, req.userId)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     delete conversations[sessionId];
     await db.deleteConversation(sessionId).catch(() => {});
   }
   res.json({ success: true });
+});
+
+// List all conversations for the authenticated user (cross-device sync)
+app.get('/api/conversations', clerkAuth, requireAuth, async (req, res) => {
+  const rows = await db.listConversationsByUser(req.userId);
+  res.json({ conversations: rows });
+});
+
+// Claim guest conversations by sessionId — used right after sign-in so a
+// user's pre-login chats transfer to their account
+app.post('/api/claim-sessions', clerkAuth, requireAuth, async (req, res) => {
+  const { sessionIds } = req.body;
+  if (!Array.isArray(sessionIds)) {
+    return res.status(400).json({ error: 'sessionIds must be an array' });
+  }
+  const claimed = await db.claimSessions(sessionIds, req.userId);
+  res.json({ claimed });
 });
 
 // Only start server if run directly (not imported for testing)
