@@ -44,16 +44,23 @@ async function getConversation(sessionId) {
   return result.rows.length > 0 ? result.rows[0].messages : null;
 }
 
-async function saveConversation(sessionId, messages) {
+async function saveConversation(sessionId, messages, userId = null) {
   const p = getPool();
   if (!p) return false;
 
+  // Only overwrite user_id when one is provided on this call — avoids nulling
+  // out ownership if a later request arrives without auth headers (e.g. token
+  // briefly unavailable). This also lets a guest session be "claimed" the
+  // first time an authenticated request comes in with the same sessionId.
   await p.query(
-    `INSERT INTO conversations (session_id, messages, updated_at)
-     VALUES ($1, $2, NOW())
+    `INSERT INTO conversations (session_id, messages, user_id, updated_at)
+     VALUES ($1, $2, $3, NOW())
      ON CONFLICT (session_id)
-     DO UPDATE SET messages = $2, updated_at = NOW()`,
-    [sessionId, JSON.stringify(messages)]
+     DO UPDATE SET
+       messages = EXCLUDED.messages,
+       user_id = COALESCE(EXCLUDED.user_id, conversations.user_id),
+       updated_at = NOW()`,
+    [sessionId, JSON.stringify(messages), userId]
   );
   return true;
 }

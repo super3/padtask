@@ -1618,11 +1618,19 @@
             }
 
             try {
+                const headers = { 'Content-Type': 'application/json' };
+                // Attach Clerk session token when signed in so the server can
+                // associate this conversation with the authenticated user.
+                try {
+                    if (window.Clerk && window.Clerk.session) {
+                        const token = await window.Clerk.session.getToken();
+                        if (token) headers['Authorization'] = `Bearer ${token}`;
+                    }
+                } catch (e) { /* fall through as guest */ }
+
                 const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers,
                     body: JSON.stringify({
                         sessionId: getSessionId(),
                         message: fullMessage,

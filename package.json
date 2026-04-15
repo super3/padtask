@@ -24,11 +24,13 @@
       }
     },
     "collectCoverageFrom": [
-      "server.js"
+      "server.js",
+      "auth.js"
     ]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@clerk/backend": "^3.2.10",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

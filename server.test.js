@@ -10,7 +10,13 @@ jest.mock('./db', () => ({
   setPool: jest.fn()
 }));
 
+// Mock @clerk/backend so tests don't need a real Clerk key
+jest.mock('@clerk/backend', () => ({
+  verifyToken: jest.fn()
+}));
+
 const db = require('./db');
+const { verifyToken } = require('@clerk/backend');
 const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {
@@ -30,6 +36,9 @@ describe('PadTask Server', () => {
     db.getConversation.mockReset().mockResolvedValue(null);
     db.saveConversation.mockReset().mockResolvedValue(false);
     db.deleteConversation.mockReset().mockResolvedValue(false);
+    verifyToken.mockReset();
+    // Default: no CLERK_SECRET_KEY — guest mode
+    delete process.env.CLERK_SECRET_KEY;
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
   });
@@ -288,8 +297,102 @@ describe('PadTask Server', () => {
       expect(conversations['db-session'][1].content).toBe('Previous answer');
       expect(conversations['db-session'][2].content).toBe('Follow-up question');
       expect(conversations['db-session'][3].content).toBe('Follow-up response');
-      // Verify DB save was attempted
-      expect(db.saveConversation).toHaveBeenCalledWith('db-session', expect.any(Array));
+      // Verify DB save was attempted as guest (null userId)
+      expect(db.saveConversation).toHaveBeenCalledWith('db-session', expect.any(Array), null);
+    });
+
+    it('should associate conversation with Clerk userId when token is valid', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_abc123' });
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello user!' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer valid.jwt.token')
+        .send({ sessionId: 'authed-session', message: 'Hi' });
+
+      expect(verifyToken).toHaveBeenCalledWith('valid.jwt.token', { secretKey: 'sk_test_dummy' });
+      expect(db.saveConversation).toHaveBeenCalledWith('authed-session', expect.any(Array), 'user_abc123');
+    });
+
+    it('should treat invalid Clerk tokens as guest sessions', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockRejectedValue(new Error('invalid token'));
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello guest!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer bad.jwt.token')
+        .send({ sessionId: 'bad-token-session', message: 'Hi' });
+
+      expect(response.status).toBe(200);
+      expect(db.saveConversation).toHaveBeenCalledWith('bad-token-session', expect.any(Array), null);
+    });
+
+    it('should skip token verification when CLERK_SECRET_KEY is not set', async () => {
+      // No CLERK_SECRET_KEY (deleted in beforeEach)
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer some.token')
+        .send({ sessionId: 'no-key-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('no-key-session', expect.any(Array), null);
+    });
+
+    it('should treat missing authorization header as guest when key is set', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'no-auth-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('no-auth-session', expect.any(Array), null);
+    });
+
+    it('should handle Clerk payload without sub claim as guest', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({}); // payload with no sub
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer tokenish')
+        .send({ sessionId: 'no-sub-session', message: 'Hi' });
+
+      expect(db.saveConversation).toHaveBeenCalledWith('no-sub-session', expect.any(Array), null);
+    });
+
+    it('should ignore non-Bearer authorization headers', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Basic dXNlcjpwYXNz')
+        .send({ sessionId: 'basic-auth-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('basic-auth-session', expect.any(Array), null);
     });
 
     it('should swallow database save errors without failing the request', async () => {

@@ -3,6 +3,7 @@ const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
 const db = require('./db');
+const { clerkAuth } = require('./auth');
 require('dotenv').config();
 
 const app = express();
@@ -53,7 +54,7 @@ Rules:
 If the user asks to clear tasks or start over, acknowledge it (don't output any task markdown).
 If the user's message isn't about tasks, respond helpfully.`;
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', clerkAuth, async (req, res) => {
   const { sessionId, message, currentTasks } = req.body;
 
   if (!sessionId || !message) {
@@ -139,8 +140,9 @@ app.post('/api/chat', async (req, res) => {
       content: chatMessage || assistantMessage
     });
 
-    // Persist to database (non-blocking, best-effort)
-    db.saveConversation(sessionId, conversations[sessionId]).catch(() => {});
+    // Persist to database with the Clerk userId (null for guests)
+    // Non-blocking, best-effort — DB errors shouldn't break the API response
+    db.saveConversation(sessionId, conversations[sessionId], req.userId).catch(() => {});
 
     res.json({
       message: chatMessage,
@@ -155,7 +157,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Clear conversation endpoint
-app.post('/api/clear', async (req, res) => {
+app.post('/api/clear', clerkAuth, async (req, res) => {
   const { sessionId } = req.body;
   if (sessionId) {
     delete conversations[sessionId];
