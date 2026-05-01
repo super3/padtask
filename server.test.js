@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
+const { app, conversations, setAnthropicClient, SYSTEM_PROMPT, apiLimiter } = require('./server');
 
 describe('PadTask Server', () => {
   // Mock Anthropic client
@@ -17,6 +17,10 @@ describe('PadTask Server', () => {
     mockCreate.mockReset();
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
+    // Clear rate limiter state between tests
+    apiLimiter.resetKey('::ffff:127.0.0.1');
+    // Ensure no auth by default
+    delete process.env.API_SECRET_KEY;
   });
 
   describe('SYSTEM_PROMPT', () => {
@@ -41,6 +45,126 @@ describe('PadTask Server', () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('ok');
       expect(response.body.timestamp).toBeDefined();
+    });
+  });
+
+  describe('Security headers', () => {
+    it('should include helmet security headers', async () => {
+      const response = await request(app).get('/health');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
+    });
+  });
+
+  describe('CORS', () => {
+    it('should block requests from disallowed origins', async () => {
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'https://evil.com');
+      expect(response.status).toBe(500);
+    });
+
+    it('should allow requests with no origin (same-origin)', async () => {
+      const response = await request(app).get('/health');
+      expect(response.status).toBe(200);
+    });
+
+    it('should allow requests from allowed origins', async () => {
+      process.env.ALLOWED_ORIGINS = 'https://good.com,https://other.com';
+
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'https://good.com');
+      expect(response.status).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBe('https://good.com');
+
+      delete process.env.ALLOWED_ORIGINS;
+    });
+  });
+
+  describe('Authentication middleware', () => {
+    it('should skip auth when API_SECRET_KEY is not set', async () => {
+      delete process.env.API_SECRET_KEY;
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('should return 401 when API_SECRET_KEY is set but no auth header', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Authentication required');
+    });
+
+    it('should return 401 when auth header has wrong token', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer wrong-token')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Invalid authentication token');
+    });
+
+    it('should return 401 when auth header is not Bearer format', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Basic dXNlcjpwYXNz')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Authentication required');
+    });
+
+    it('should allow request with correct Bearer token', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Authenticated!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer test-secret')
+        .send({ sessionId: 'test', message: 'Hello' });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('should require auth on /api/clear when API_SECRET_KEY is set', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+
+      const response = await request(app)
+        .post('/api/clear')
+        .send({ sessionId: 'test' });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should allow /api/clear with correct token', async () => {
+      process.env.API_SECRET_KEY = 'test-secret';
+
+      const response = await request(app)
+        .post('/api/clear')
+        .set('Authorization', 'Bearer test-secret')
+        .send({ sessionId: 'test' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
     });
   });
 
