@@ -16,6 +16,18 @@ const setAnthropicClient = (client) => {
   anthropic = client;
 };
 
+// fetch is injectable so tests can mock Umami API calls
+let fetchImpl = globalThis.fetch;
+const setFetchImpl = (f) => {
+  fetchImpl = f;
+};
+
+// 60s in-memory cache for Umami stats so we don't hammer their API
+let statsCache = { data: null, expiresAt: 0 };
+const resetStatsCache = () => {
+  statsCache = { data: null, expiresAt: 0 };
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -146,6 +158,45 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Public stats endpoint — proxies Umami Cloud so the API key stays server-side.
+// Returns 30-day visitors + pageviews. Cached for 60s.
+app.get('/api/public-stats', async (req, res) => {
+  const apiKey = process.env.UMAMI_API_KEY;
+  const websiteId = process.env.UMAMI_WEBSITE_ID;
+  const apiBase = process.env.UMAMI_API_URL || 'https://api.umami.is/v1';
+
+  if (!apiKey || !websiteId) {
+    return res.status(503).json({ error: 'Stats not configured' });
+  }
+
+  if (statsCache.data && Date.now() < statsCache.expiresAt) {
+    return res.json(statsCache.data);
+  }
+
+  const endAt = Date.now();
+  const startAt = endAt - 30 * 24 * 60 * 60 * 1000;
+  const url = `${apiBase}/websites/${websiteId}/stats?startAt=${startAt}&endAt=${endAt}`;
+
+  try {
+    const response = await fetchImpl(url, {
+      headers: { 'x-umami-api-key': apiKey }
+    });
+    if (!response.ok) {
+      throw new Error(`Umami API returned ${response.status}`);
+    }
+    const data = await response.json();
+    const stats = {
+      visitors: (data.visitors && data.visitors.value) || 0,
+      pageviews: (data.pageviews && data.pageviews.value) || 0
+    };
+    statsCache = { data: stats, expiresAt: Date.now() + 60000 };
+    res.json(stats);
+  } catch (error) {
+    console.error('Umami API Error:', error.message);
+    res.status(502).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 // Clear conversation endpoint
 app.post('/api/clear', (req, res) => {
   const { sessionId } = req.body;
@@ -176,4 +227,4 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT };
+module.exports = { app, conversations, setAnthropicClient, setFetchImpl, resetStatsCache, SYSTEM_PROMPT };

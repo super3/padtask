@@ -6,6 +6,8 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>">
     <title>PadTask</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Umami analytics: replace data-website-id with your site ID from cloud.umami.is -->
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="REPLACE_WITH_UMAMI_SITE_ID"></script>
     <script
         async
         crossorigin="anonymous"
@@ -243,6 +245,27 @@
             bottom: 32px;
             left: 8px;
             right: 8px;
+        }
+
+        .sidebar-stats {
+            position: absolute;
+            bottom: 6px;
+            left: 12px;
+            right: 12px;
+            font-size: 11px;
+            color: #555;
+            display: none;
+            gap: 10px;
+            align-items: center;
+            letter-spacing: 0.02em;
+        }
+
+        .sidebar.expanded .sidebar-stats {
+            display: flex;
+        }
+
+        .sidebar-stats .dot {
+            opacity: 0.5;
         }
 
         .user-btn {
@@ -941,6 +964,13 @@
                     </svg>
                     <span>Sign in</span>
                 </button>
+            </div>
+            <div class="sidebar-stats" id="sidebarStats" title="Last 30 days" style="display: none;">
+                <span id="statsVisitors">–</span>
+                <span>visitors</span>
+                <span class="dot">·</span>
+                <span id="statsPageviews">–</span>
+                <span>views</span>
             </div>
         </div>
 
@@ -1715,6 +1745,21 @@
         loadChats();
         updateTodoDisplay();
         updatePanelTitle();
+
+        // Fetch public stats from Umami (via /api/public-stats). Silently hide on failure.
+        (async function loadPublicStats() {
+            try {
+                const res = await fetch('/api/public-stats');
+                if (!res.ok) return;
+                const { visitors, pageviews } = await res.json();
+                const fmt = (n) => n.toLocaleString();
+                document.getElementById('statsVisitors').textContent = fmt(visitors);
+                document.getElementById('statsPageviews').textContent = fmt(pageviews);
+                document.getElementById('sidebarStats').style.display = '';
+            } catch (_) {
+                // Stats are optional — fail quiet.
+            }
+        })();
     </script>
 </body>
 </html>

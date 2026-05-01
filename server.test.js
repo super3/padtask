@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
+const { app, conversations, setAnthropicClient, setFetchImpl, resetStatsCache, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {
   // Mock Anthropic client
@@ -266,6 +266,123 @@ describe('PadTask Server', () => {
       const callArgs = mockCreate.mock.calls[0][0];
       expect(callArgs.system).toContain('CURRENT TASK LIST');
       expect(callArgs.system).toContain(currentTasks);
+    });
+  });
+
+  describe('GET /api/public-stats', () => {
+    const originalEnv = { ...process.env };
+
+    beforeEach(() => {
+      resetStatsCache();
+      process.env.UMAMI_API_KEY = 'test-key';
+      process.env.UMAMI_WEBSITE_ID = 'test-site';
+      delete process.env.UMAMI_API_URL;
+    });
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+      setFetchImpl(globalThis.fetch);
+    });
+
+    it('should return 503 when Umami is not configured', async () => {
+      delete process.env.UMAMI_API_KEY;
+      delete process.env.UMAMI_WEBSITE_ID;
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe('Stats not configured');
+    });
+
+    it('should return 503 when only website ID is set', async () => {
+      delete process.env.UMAMI_API_KEY;
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(503);
+    });
+
+    it('should return visitors and pageviews from Umami', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          visitors: { value: 142, prev: 100 },
+          pageviews: { value: 1230, prev: 900 }
+        })
+      });
+      setFetchImpl(mockFetch);
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ visitors: 142, pageviews: 1230 });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('api.umami.is/v1/websites/test-site/stats');
+      expect(url).toContain('startAt=');
+      expect(url).toContain('endAt=');
+      expect(options.headers['x-umami-api-key']).toBe('test-key');
+    });
+
+    it('should use custom UMAMI_API_URL when set', async () => {
+      process.env.UMAMI_API_URL = 'https://umami.example.com/api';
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ visitors: { value: 1 }, pageviews: { value: 2 } })
+      });
+      setFetchImpl(mockFetch);
+
+      await request(app).get('/api/public-stats');
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('https://umami.example.com/api/websites/test-site/stats');
+    });
+
+    it('should default to 0 when Umami response is missing fields', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({})
+      });
+      setFetchImpl(mockFetch);
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ visitors: 0, pageviews: 0 });
+    });
+
+    it('should return cached stats on subsequent calls within 60s', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ visitors: { value: 10 }, pageviews: { value: 20 } })
+      });
+      setFetchImpl(mockFetch);
+
+      const first = await request(app).get('/api/public-stats');
+      const second = await request(app).get('/api/public-stats');
+
+      expect(first.body).toEqual({ visitors: 10, pageviews: 20 });
+      expect(second.body).toEqual({ visitors: 10, pageviews: 20 });
+      // Umami should only have been hit once; second call served from cache
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return 502 when Umami responds with non-OK', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      setFetchImpl(jest.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(502);
+      expect(response.body.error).toBe('Failed to fetch stats');
+      expect(consoleSpy).toHaveBeenCalledWith('Umami API Error:', 'Umami API returned 401');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should return 502 when fetch throws', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      setFetchImpl(jest.fn().mockRejectedValue(new Error('network down')));
+
+      const response = await request(app).get('/api/public-stats');
+      expect(response.status).toBe(502);
+      expect(consoleSpy).toHaveBeenCalledWith('Umami API Error:', 'network down');
+
+      consoleSpy.mockRestore();
     });
   });
 
