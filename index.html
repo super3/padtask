@@ -1081,6 +1081,8 @@
             });
         }
 
+        let prevClerkUserId = null;
+
         async function initClerk() {
             const clerk = await waitForClerk();
             if (!clerk) {
@@ -1092,15 +1094,107 @@
 
             if (clerk.user) {
                 showClerkButton();
+                prevClerkUserId = clerk.user.id;
+                // Already signed in (e.g. page reload) — pull server history
+                syncWithServer();
             }
 
-            clerk.addListener(({ user }) => {
+            clerk.addListener(async ({ user }) => {
+                const currentUserId = user?.id || null;
                 if (user) {
                     showClerkButton();
                 } else {
                     hideClerkButton();
                 }
+
+                if (currentUserId && currentUserId !== prevClerkUserId) {
+                    // Sign-in (or switched accounts): claim guest sessions
+                    // and pull this user's history down for cross-device sync
+                    await syncWithServer();
+                } else if (!currentUserId && prevClerkUserId) {
+                    // Sign-out: clear UI so the next user (or the same user as
+                    // a guest) starts fresh. The data is safe on the server,
+                    // tied to the previous user_id.
+                    clearLocalChatsAndStartFresh();
+                }
+                prevClerkUserId = currentUserId;
             });
+        }
+
+        async function getClerkAuthHeader() {
+            if (!window.Clerk || !window.Clerk.session) return null;
+            try {
+                const token = await window.Clerk.session.getToken();
+                return token ? `Bearer ${token}` : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function syncWithServer() {
+            const auth = await getClerkAuthHeader();
+            if (!auth) return;
+
+            // Claim any guest sessions currently in localStorage so they
+            // become tied to this user (only succeeds for unowned rows).
+            const sessionIds = chats.map(c => c.id).filter(Boolean);
+            if (sessionIds.length > 0) {
+                try {
+                    await fetch(`${API_BASE}/api/claim-sessions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': auth
+                        },
+                        body: JSON.stringify({ sessionIds })
+                    });
+                } catch (e) { /* ignore — best effort */ }
+            }
+
+            // Pull this user's full conversation list from the server
+            try {
+                const response = await fetch(`${API_BASE}/api/conversations`, {
+                    headers: { 'Authorization': auth }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    mergeServerConversations(data.conversations || []);
+                }
+            } catch (e) { /* ignore — best effort */ }
+        }
+
+        function mergeServerConversations(serverConvos) {
+            if (!serverConvos.length) return;
+            serverConvos.forEach(sc => {
+                const existing = chats.find(c => c.id === sc.sessionId);
+                if (existing) {
+                    // Server is source of truth for message history
+                    existing.messages = sc.messages || existing.messages;
+                } else {
+                    // Derive a name from the first user message if available
+                    const firstUserMsg = (sc.messages || []).find(m => m.role === 'user');
+                    const name = firstUserMsg
+                        ? firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+                        : `Chat ${chats.length + 1}`;
+                    chats.push({
+                        id: sc.sessionId,
+                        name,
+                        todoMarkdown: '',
+                        messages: sc.messages || []
+                    });
+                }
+            });
+            saveChats();
+            renderChatList();
+        }
+
+        function clearLocalChatsAndStartFresh() {
+            chats = [];
+            localStorage.removeItem('padtask-chats');
+            currentSessionId = null;
+            todoMarkdown = '';
+            conversationHistory = [];
+            createNewChat();
         }
 
         function showClerkButton() {
@@ -1618,11 +1712,19 @@
             }
 
             try {
+                const headers = { 'Content-Type': 'application/json' };
+                // Attach Clerk session token when signed in so the server can
+                // associate this conversation with the authenticated user.
+                try {
+                    if (window.Clerk && window.Clerk.session) {
+                        const token = await window.Clerk.session.getToken();
+                        if (token) headers['Authorization'] = `Bearer ${token}`;
+                    }
+                } catch (e) { /* fall through as guest */ }
+
                 const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers,
                     body: JSON.stringify({
                         sessionId: getSessionId(),
                         message: fullMessage,

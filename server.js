@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
+const db = require('./db');
+const { clerkAuth } = require('./auth');
 require('dotenv').config();
 
 const app = express();
@@ -27,8 +29,22 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Store conversation history per session (in production, use a database)
+// In-memory fallback when DATABASE_URL is not set
 const conversations = {};
+
+// Ownership rule: guest rows (user_id=NULL) are open to anyone who knows the
+// (unguessable) sessionId. Owned rows only allow requests from the same user.
+function canAccess(rowUserId, reqUserId) {
+  return rowUserId === null || rowUserId === reqUserId;
+}
+
+// Reject unauthenticated requests — used on user-scoped endpoints
+function requireAuth(req, res, next) {
+  if (!req.userId) {
+    return res.status(401).json({ error: 'authentication required' });
+  }
+  next();
+}
 
 const SYSTEM_PROMPT = `You are a helpful task organizer assistant for PadTask. Your job is to help users organize their tasks and todos.
 
@@ -52,15 +68,23 @@ Rules:
 If the user asks to clear tasks or start over, acknowledge it (don't output any task markdown).
 If the user's message isn't about tasks, respond helpfully.`;
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', clerkAuth, async (req, res) => {
   const { sessionId, message, currentTasks } = req.body;
 
   if (!sessionId || !message) {
     return res.status(400).json({ error: 'sessionId and message are required' });
   }
 
-  // Initialize session if needed
-  if (!conversations[sessionId]) {
+  // Load conversation from DB or fall back to in-memory
+  const row = await db.getConversation(sessionId);
+  if (row !== null) {
+    // Enforce ownership: owned rows are only accessible to the owner
+    if (!canAccess(row.userId, req.userId)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    // DB is available — sync to in-memory for consistent access
+    conversations[sessionId] = row.messages;
+  } else if (!conversations[sessionId]) {
     conversations[sessionId] = [];
   }
 
@@ -134,6 +158,10 @@ app.post('/api/chat', async (req, res) => {
       content: chatMessage || assistantMessage
     });
 
+    // Persist to database with the Clerk userId (null for guests)
+    // Non-blocking, best-effort — DB errors shouldn't break the API response
+    db.saveConversation(sessionId, conversations[sessionId], req.userId).catch(() => {});
+
     res.json({
       message: chatMessage,
       todoMarkdown: todoMarkdown || null,
@@ -147,18 +175,53 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Clear conversation endpoint
-app.post('/api/clear', (req, res) => {
+app.post('/api/clear', clerkAuth, async (req, res) => {
   const { sessionId } = req.body;
-  if (sessionId && conversations[sessionId]) {
+  if (sessionId) {
+    const row = await db.getConversation(sessionId);
+    if (row !== null && !canAccess(row.userId, req.userId)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
     delete conversations[sessionId];
+    await db.deleteConversation(sessionId).catch(() => {});
   }
   res.json({ success: true });
+});
+
+// List all conversations for the authenticated user (cross-device sync)
+app.get('/api/conversations', clerkAuth, requireAuth, async (req, res) => {
+  const rows = await db.listConversationsByUser(req.userId);
+  res.json({ conversations: rows });
+});
+
+// Claim guest conversations by sessionId — used right after sign-in so a
+// user's pre-login chats transfer to their account
+app.post('/api/claim-sessions', clerkAuth, requireAuth, async (req, res) => {
+  const { sessionIds } = req.body;
+  if (!Array.isArray(sessionIds)) {
+    return res.status(400).json({ error: 'sessionIds must be an array' });
+  }
+  const claimed = await db.claimSessions(sessionIds, req.userId);
+  res.json({ claimed });
 });
 
 // Only start server if run directly (not imported for testing)
 /* istanbul ignore next */
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
+
+  db.initDatabase()
+    .then((dbReady) => {
+      if (dbReady) {
+        console.log('Database connected and initialized');
+      } else {
+        console.log('No DATABASE_URL set — using in-memory conversation storage');
+      }
+    })
+    .catch((err) => {
+      console.error('Database initialization failed, falling back to in-memory:', err.message);
+    });
+
   const server = app.listen(PORT, () => {
     console.log(`PadTask server running on http://localhost:${PORT}`);
   });
@@ -166,7 +229,8 @@ if (require.main === module) {
   // Graceful shutdown handling
   const shutdown = (signal) => {
     console.log(`${signal} received, shutting down gracefully`);
-    server.close(() => {
+    server.close(async () => {
+      await db.closePool();
       console.log('Server closed');
       process.exit(0);
     });

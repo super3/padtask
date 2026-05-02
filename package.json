@@ -7,7 +7,11 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "migrate": "node-pg-migrate -m migrations",
+    "migrate:up": "node-pg-migrate up -m migrations",
+    "migrate:down": "node-pg-migrate down -m migrations",
+    "migrate:create": "node-pg-migrate create -m migrations --migration-file-language cjs"
   },
   "jest": {
     "testEnvironment": "node",
@@ -20,14 +24,18 @@
       }
     },
     "collectCoverageFrom": [
-      "server.js"
+      "server.js",
+      "auth.js"
     ]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@clerk/backend": "^3.2.10",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "node-pg-migrate": "^8.0.4",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "jest": "^30.2.0",
