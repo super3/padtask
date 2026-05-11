@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const path = require('path');
 const db = require('./db');
@@ -18,8 +20,67 @@ const setAnthropicClient = (client) => {
   anthropic = client;
 };
 
-app.use(cors());
+// Security headers via helmet
+// Configure CSP to allow the frontend's external scripts (jsdelivr, Clerk) and inline scripts/styles
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://*.clerk.accounts.dev",
+        "https://*.clerk.com"
+      ],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://*.clerk.accounts.dev",
+        "https://*.clerk.com"
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https://*.clerk.com", "https://img.clerk.com"],
+      connectSrc: [
+        "'self'",
+        "https://*.clerk.accounts.dev",
+        "https://clerk-telemetry.com",
+        "https://padtask-production.up.railway.app"
+      ],
+      workerSrc: ["'self'", "blob:"],
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"]
+    }
+  }
+}));
+
+// CORS: restrict to allowed origins (comma-separated in env), default to same-origin only
+const getAllowedOrigins = () => {
+  return process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : [];
+};
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, server-to-server, curl)
+    if (!origin) return callback(null, true);
+    if (getAllowedOrigins().includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  }
+}));
+
 app.use(express.json());
+
+// Rate limiting for API endpoints
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api/', apiLimiter);
 
 // Serve static files (index.html)
 app.use(express.static(path.join(__dirname)));
@@ -39,7 +100,7 @@ function canAccess(rowUserId, reqUserId) {
 }
 
 // Reject unauthenticated requests — used on user-scoped endpoints
-function requireAuth(req, res, next) {
+function requireUser(req, res, next) {
   if (!req.userId) {
     return res.status(401).json({ error: 'authentication required' });
   }
@@ -189,14 +250,14 @@ app.post('/api/clear', clerkAuth, async (req, res) => {
 });
 
 // List all conversations for the authenticated user (cross-device sync)
-app.get('/api/conversations', clerkAuth, requireAuth, async (req, res) => {
+app.get('/api/conversations', clerkAuth, requireUser, async (req, res) => {
   const rows = await db.listConversationsByUser(req.userId);
   res.json({ conversations: rows });
 });
 
 // Claim guest conversations by sessionId — used right after sign-in so a
 // user's pre-login chats transfer to their account
-app.post('/api/claim-sessions', clerkAuth, requireAuth, async (req, res) => {
+app.post('/api/claim-sessions', clerkAuth, requireUser, async (req, res) => {
   const { sessionIds } = req.body;
   if (!Array.isArray(sessionIds)) {
     return res.status(400).json({ error: 'sessionIds must be an array' });
@@ -240,4 +301,4 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT };
+module.exports = { app, conversations, setAnthropicClient, SYSTEM_PROMPT, apiLimiter };
