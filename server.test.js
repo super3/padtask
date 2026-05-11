@@ -1,4 +1,24 @@
 const request = require('supertest');
+
+// Mock db module — tests use in-memory fallback
+jest.mock('./db', () => ({
+  getConversation: jest.fn().mockResolvedValue(null),
+  saveConversation: jest.fn().mockResolvedValue(false),
+  deleteConversation: jest.fn().mockResolvedValue(false),
+  listConversationsByUser: jest.fn().mockResolvedValue([]),
+  claimSessions: jest.fn().mockResolvedValue(0),
+  initDatabase: jest.fn().mockResolvedValue(false),
+  closePool: jest.fn().mockResolvedValue(undefined),
+  setPool: jest.fn()
+}));
+
+// Mock @clerk/backend so tests don't need a real Clerk key
+jest.mock('@clerk/backend', () => ({
+  verifyToken: jest.fn()
+}));
+
+const db = require('./db');
+const { verifyToken } = require('@clerk/backend');
 const { app, conversations, setAnthropicClient, SYSTEM_PROMPT } = require('./server');
 
 describe('PadTask Server', () => {
@@ -13,8 +33,16 @@ describe('PadTask Server', () => {
   beforeEach(() => {
     // Clear conversations before each test
     Object.keys(conversations).forEach(key => delete conversations[key]);
-    // Reset mock
+    // Reset mocks
     mockCreate.mockReset();
+    db.getConversation.mockReset().mockResolvedValue(null);
+    db.saveConversation.mockReset().mockResolvedValue(false);
+    db.deleteConversation.mockReset().mockResolvedValue(false);
+    db.listConversationsByUser.mockReset().mockResolvedValue([]);
+    db.claimSessions.mockReset().mockResolvedValue(0);
+    verifyToken.mockReset();
+    // Default: no CLERK_SECRET_KEY — guest mode
+    delete process.env.CLERK_SECRET_KEY;
     // Inject mock client
     setAnthropicClient(mockAnthropicClient);
   });
@@ -252,6 +280,145 @@ describe('PadTask Server', () => {
       expect(stored.content).toContain('All set.');
     });
 
+    it('should load conversation history from database when available', async () => {
+      // Simulate DB returning existing guest history (userId = null)
+      db.getConversation.mockResolvedValue({
+        messages: [
+          { role: 'user', content: 'Previous question' },
+          { role: 'assistant', content: 'Previous answer' }
+        ],
+        userId: null
+      });
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Follow-up response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'db-session', message: 'Follow-up question' });
+
+      // Verify DB history was loaded and appended to
+      expect(conversations['db-session'].length).toBe(4);
+      expect(conversations['db-session'][0].content).toBe('Previous question');
+      expect(conversations['db-session'][1].content).toBe('Previous answer');
+      expect(conversations['db-session'][2].content).toBe('Follow-up question');
+      expect(conversations['db-session'][3].content).toBe('Follow-up response');
+      // Verify DB save was attempted as guest (null userId)
+      expect(db.saveConversation).toHaveBeenCalledWith('db-session', expect.any(Array), null);
+    });
+
+    it('should associate conversation with Clerk userId when token is valid', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_abc123' });
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello user!' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer valid.jwt.token')
+        .send({ sessionId: 'authed-session', message: 'Hi' });
+
+      expect(verifyToken).toHaveBeenCalledWith('valid.jwt.token', { secretKey: 'sk_test_dummy' });
+      expect(db.saveConversation).toHaveBeenCalledWith('authed-session', expect.any(Array), 'user_abc123');
+    });
+
+    it('should treat invalid Clerk tokens as guest sessions', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockRejectedValue(new Error('invalid token'));
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello guest!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer bad.jwt.token')
+        .send({ sessionId: 'bad-token-session', message: 'Hi' });
+
+      expect(response.status).toBe(200);
+      expect(db.saveConversation).toHaveBeenCalledWith('bad-token-session', expect.any(Array), null);
+    });
+
+    it('should skip token verification when CLERK_SECRET_KEY is not set', async () => {
+      // No CLERK_SECRET_KEY (deleted in beforeEach)
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer some.token')
+        .send({ sessionId: 'no-key-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('no-key-session', expect.any(Array), null);
+    });
+
+    it('should treat missing authorization header as guest when key is set', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'no-auth-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('no-auth-session', expect.any(Array), null);
+    });
+
+    it('should handle Clerk payload without sub claim as guest', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({}); // payload with no sub
+
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer tokenish')
+        .send({ sessionId: 'no-sub-session', message: 'Hi' });
+
+      expect(db.saveConversation).toHaveBeenCalledWith('no-sub-session', expect.any(Array), null);
+    });
+
+    it('should ignore non-Bearer authorization headers', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Basic dXNlcjpwYXNz')
+        .send({ sessionId: 'basic-auth-session', message: 'Hi' });
+
+      expect(verifyToken).not.toHaveBeenCalled();
+      expect(db.saveConversation).toHaveBeenCalledWith('basic-auth-session', expect.any(Array), null);
+    });
+
+    it('should swallow database save errors without failing the request', async () => {
+      db.saveConversation.mockRejectedValue(new Error('DB write failed'));
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Response' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'db-error-session', message: 'Hello' });
+
+      // Request still succeeds even though DB write failed
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Response');
+      // Give the .catch() handler a tick to run
+      await new Promise(resolve => setImmediate(resolve));
+    });
+
     it('should include currentTasks in system prompt when provided', async () => {
       mockCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Updated tasks!' }]
@@ -302,6 +469,151 @@ describe('PadTask Server', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+    });
+
+    it('should swallow database delete errors', async () => {
+      db.deleteConversation.mockRejectedValue(new Error('DB delete failed'));
+
+      const response = await request(app)
+        .post('/api/clear')
+        .send({ sessionId: 'db-error-clear' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(db.deleteConversation).toHaveBeenCalledWith('db-error-clear');
+    });
+
+    it('should refuse to clear a conversation owned by another user', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_b' });
+      db.getConversation.mockResolvedValue({
+        messages: [{ role: 'user', content: 'Hi' }],
+        userId: 'user_a'
+      });
+
+      const response = await request(app)
+        .post('/api/clear')
+        .set('Authorization', 'Bearer tok')
+        .send({ sessionId: 'owned-by-a' });
+
+      expect(response.status).toBe(403);
+      expect(db.deleteConversation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Ownership enforcement on /api/chat', () => {
+    it('should reject guest requests to an owned conversation', async () => {
+      db.getConversation.mockResolvedValue({
+        messages: [{ role: 'user', content: 'private' }],
+        userId: 'user_a'
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .send({ sessionId: 'owned-session', message: 'Hi' });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('forbidden');
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('should reject requests from a different authenticated user', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_b' });
+      db.getConversation.mockResolvedValue({
+        messages: [{ role: 'user', content: 'private' }],
+        userId: 'user_a'
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer tok')
+        .send({ sessionId: 'user-a-session', message: 'Hi' });
+
+      expect(response.status).toBe(403);
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('should allow the owner to access their conversation', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_a' });
+      db.getConversation.mockResolvedValue({
+        messages: [{ role: 'user', content: 'earlier' }],
+        userId: 'user_a'
+      });
+      mockCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Welcome back!' }]
+      });
+
+      const response = await request(app)
+        .post('/api/chat')
+        .set('Authorization', 'Bearer tok')
+        .send({ sessionId: 'user-a-session', message: 'Hi again' });
+
+      expect(response.status).toBe(200);
+      expect(db.saveConversation).toHaveBeenCalledWith('user-a-session', expect.any(Array), 'user_a');
+    });
+  });
+
+  describe('GET /api/conversations', () => {
+    it('should return 401 when not authenticated', async () => {
+      const response = await request(app).get('/api/conversations');
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('authentication required');
+    });
+
+    it('should return the authenticated user\'s conversations', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_a' });
+      db.listConversationsByUser.mockResolvedValue([
+        { sessionId: 's1', messages: [{ role: 'user', content: 'hi' }], updatedAt: '2024-01-01' }
+      ]);
+
+      const response = await request(app)
+        .get('/api/conversations')
+        .set('Authorization', 'Bearer tok');
+
+      expect(response.status).toBe(200);
+      expect(db.listConversationsByUser).toHaveBeenCalledWith('user_a');
+      expect(response.body.conversations).toHaveLength(1);
+      expect(response.body.conversations[0].sessionId).toBe('s1');
+    });
+  });
+
+  describe('POST /api/claim-sessions', () => {
+    it('should return 401 when not authenticated', async () => {
+      const response = await request(app)
+        .post('/api/claim-sessions')
+        .send({ sessionIds: ['s1'] });
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 400 when sessionIds is not an array', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_a' });
+
+      const response = await request(app)
+        .post('/api/claim-sessions')
+        .set('Authorization', 'Bearer tok')
+        .send({ sessionIds: 'not-an-array' });
+
+      expect(response.status).toBe(400);
+      expect(db.claimSessions).not.toHaveBeenCalled();
+    });
+
+    it('should claim guest sessions for the authenticated user', async () => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy';
+      verifyToken.mockResolvedValue({ sub: 'user_a' });
+      db.claimSessions.mockResolvedValue(2);
+
+      const response = await request(app)
+        .post('/api/claim-sessions')
+        .set('Authorization', 'Bearer tok')
+        .send({ sessionIds: ['s1', 's2', 's3'] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.claimed).toBe(2);
+      expect(db.claimSessions).toHaveBeenCalledWith(['s1', 's2', 's3'], 'user_a');
     });
   });
 });
