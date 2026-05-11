@@ -1165,11 +1165,16 @@
 
         function mergeServerConversations(serverConvos) {
             if (!serverConvos.length) return;
+            let addedNewChat = false;
+            let currentChatUpdated = false;
             serverConvos.forEach(sc => {
                 const existing = chats.find(c => c.id === sc.sessionId);
                 if (existing) {
                     // Server is source of truth for message history
                     existing.messages = sc.messages || existing.messages;
+                    if (existing.id === currentSessionId) {
+                        currentChatUpdated = true;
+                    }
                 } else {
                     // Derive a name from the first user message if available
                     const firstUserMsg = (sc.messages || []).find(m => m.role === 'user');
@@ -1182,8 +1187,49 @@
                         todoMarkdown: '',
                         messages: sc.messages || []
                     });
+                    addedNewChat = true;
                 }
             });
+
+            // On a fresh device, loadChats() creates an empty placeholder chat
+            // before Clerk finishes loading. Once the server's chats arrive,
+            // drop that placeholder and switch to a real chat (URL-targeted if
+            // possible, otherwise the most-recent) so history is visible
+            // without requiring a manual sidebar click.
+            if (addedNewChat) {
+                const currentChat = chats.find(c => c.id === currentSessionId);
+                const placeholderEmpty =
+                    currentChat &&
+                    (!currentChat.messages || currentChat.messages.length === 0) &&
+                    !(currentChat.todoMarkdown && currentChat.todoMarkdown.trim());
+
+                if (placeholderEmpty) {
+                    chats = chats.filter(c => c.id !== currentSessionId);
+                    const urlChatId = getChatIdFromUrl();
+                    const target =
+                        (urlChatId && chats.find(c => c.id === urlChatId)) || chats[0];
+                    if (target) {
+                        currentSessionId = target.id;
+                        todoMarkdown = target.todoMarkdown || '';
+                        conversationHistory = target.messages || [];
+                        loadChatUI(target);
+                        updateUrl(target.id);
+                        updatePanelTitle();
+                        currentChatUpdated = false;
+                    }
+                }
+            }
+
+            // If the visible chat's server-side messages changed (cross-device
+            // sync of an existing chat), refresh the message view.
+            if (currentChatUpdated) {
+                const cur = chats.find(c => c.id === currentSessionId);
+                if (cur) {
+                    conversationHistory = cur.messages || [];
+                    loadChatUI(cur);
+                }
+            }
+
             saveChats();
             renderChatList();
         }

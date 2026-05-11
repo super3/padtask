@@ -311,6 +311,191 @@ describe('Frontend URL Routing', () => {
     });
 });
 
+describe('mergeServerConversations (cross-device sync)', () => {
+    // Mirrors the production mergeServerConversations in index.html.
+    let chats, currentSessionId, todoMarkdown, conversationHistory;
+    let mergeServerConversations, loadChatUI;
+
+    beforeEach(() => {
+        chats = [];
+        currentSessionId = null;
+        todoMarkdown = '';
+        conversationHistory = [];
+        localStorage.clear();
+        window.location.hash = '';
+
+        loadChatUI = jest.fn();
+        const renderChatList = jest.fn();
+        const updatePanelTitle = jest.fn();
+        const saveChats = () => localStorage.setItem('padtask-chats', JSON.stringify(chats));
+        const updateUrl = (id) => history.replaceState(null, '', `#/chat/${id}`);
+        const getChatIdFromUrl = () => {
+            const m = window.location.hash.match(/^#\/chat\/(.+)$/);
+            return m ? m[1] : null;
+        };
+
+        mergeServerConversations = function(serverConvos) {
+            if (!serverConvos.length) return;
+            let addedNewChat = false;
+            let currentChatUpdated = false;
+            serverConvos.forEach(sc => {
+                const existing = chats.find(c => c.id === sc.sessionId);
+                if (existing) {
+                    existing.messages = sc.messages || existing.messages;
+                    if (existing.id === currentSessionId) currentChatUpdated = true;
+                } else {
+                    const firstUserMsg = (sc.messages || []).find(m => m.role === 'user');
+                    const name = firstUserMsg
+                        ? firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+                        : `Chat ${chats.length + 1}`;
+                    chats.push({
+                        id: sc.sessionId,
+                        name,
+                        todoMarkdown: '',
+                        messages: sc.messages || []
+                    });
+                    addedNewChat = true;
+                }
+            });
+
+            if (addedNewChat) {
+                const currentChat = chats.find(c => c.id === currentSessionId);
+                const placeholderEmpty =
+                    currentChat &&
+                    (!currentChat.messages || currentChat.messages.length === 0) &&
+                    !(currentChat.todoMarkdown && currentChat.todoMarkdown.trim());
+                if (placeholderEmpty) {
+                    chats = chats.filter(c => c.id !== currentSessionId);
+                    const urlChatId = getChatIdFromUrl();
+                    const target =
+                        (urlChatId && chats.find(c => c.id === urlChatId)) || chats[0];
+                    if (target) {
+                        currentSessionId = target.id;
+                        todoMarkdown = target.todoMarkdown || '';
+                        conversationHistory = target.messages || [];
+                        loadChatUI(target);
+                        updateUrl(target.id);
+                        updatePanelTitle();
+                        currentChatUpdated = false;
+                    }
+                }
+            }
+
+            if (currentChatUpdated) {
+                const cur = chats.find(c => c.id === currentSessionId);
+                if (cur) {
+                    conversationHistory = cur.messages || [];
+                    loadChatUI(cur);
+                }
+            }
+
+            saveChats();
+            renderChatList();
+        };
+    });
+
+    it('switches to most-recent server chat when only an empty placeholder exists', () => {
+        // Simulate fresh-device state: loadChats() created an empty placeholder
+        chats = [{ id: 'placeholder', name: 'Chat 1', todoMarkdown: '', messages: [] }];
+        currentSessionId = 'placeholder';
+
+        // Server returns chats in updated_at DESC order (most-recent first)
+        mergeServerConversations([
+            { sessionId: 'srv-newest', messages: [{ role: 'user', content: 'Hello there' }] },
+            { sessionId: 'srv-older', messages: [{ role: 'user', content: 'Older chat' }] }
+        ]);
+
+        expect(chats.find(c => c.id === 'placeholder')).toBeUndefined();
+        expect(currentSessionId).toBe('srv-newest');
+        expect(conversationHistory).toEqual([{ role: 'user', content: 'Hello there' }]);
+        expect(loadChatUI).toHaveBeenCalled();
+        expect(window.location.hash).toBe('#/chat/srv-newest');
+    });
+
+    it('honors URL-targeted chat when dropping placeholder', () => {
+        chats = [{ id: 'placeholder', name: 'Chat 1', todoMarkdown: '', messages: [] }];
+        currentSessionId = 'placeholder';
+        window.location.hash = '#/chat/srv-older';
+
+        mergeServerConversations([
+            { sessionId: 'srv-newest', messages: [{ role: 'user', content: 'a' }] },
+            { sessionId: 'srv-older', messages: [{ role: 'user', content: 'b' }] }
+        ]);
+
+        expect(currentSessionId).toBe('srv-older');
+    });
+
+    it('does not drop the active chat if it has messages', () => {
+        chats = [{
+            id: 'local-active',
+            name: 'Local',
+            todoMarkdown: '',
+            messages: [{ role: 'user', content: 'local message' }]
+        }];
+        currentSessionId = 'local-active';
+
+        mergeServerConversations([
+            { sessionId: 'srv-1', messages: [{ role: 'user', content: 'srv msg' }] }
+        ]);
+
+        expect(currentSessionId).toBe('local-active');
+        expect(chats.find(c => c.id === 'local-active')).toBeDefined();
+        expect(chats.find(c => c.id === 'srv-1')).toBeDefined();
+    });
+
+    it('does not drop the active chat if it has unsaved tasks', () => {
+        chats = [{
+            id: 'placeholder-with-tasks',
+            name: 'Chat 1',
+            todoMarkdown: '## Tasks\n\n- [ ] something',
+            messages: []
+        }];
+        currentSessionId = 'placeholder-with-tasks';
+
+        mergeServerConversations([
+            { sessionId: 'srv-1', messages: [{ role: 'user', content: 'srv msg' }] }
+        ]);
+
+        expect(currentSessionId).toBe('placeholder-with-tasks');
+    });
+
+    it('refreshes the visible chat when its server messages change', () => {
+        chats = [{
+            id: 'shared',
+            name: 'Shared',
+            todoMarkdown: '',
+            messages: [{ role: 'user', content: 'old' }]
+        }];
+        currentSessionId = 'shared';
+
+        mergeServerConversations([
+            {
+                sessionId: 'shared',
+                messages: [
+                    { role: 'user', content: 'old' },
+                    { role: 'assistant', content: 'new from other device' }
+                ]
+            }
+        ]);
+
+        expect(conversationHistory).toEqual([
+            { role: 'user', content: 'old' },
+            { role: 'assistant', content: 'new from other device' }
+        ]);
+        expect(loadChatUI).toHaveBeenCalledWith(chats.find(c => c.id === 'shared'));
+    });
+
+    it('returns early when server returns no conversations', () => {
+        chats = [{ id: 'placeholder', name: 'Chat 1', todoMarkdown: '', messages: [] }];
+        currentSessionId = 'placeholder';
+
+        mergeServerConversations([]);
+
+        expect(currentSessionId).toBe('placeholder');
+        expect(loadChatUI).not.toHaveBeenCalled();
+    });
+});
+
 describe('Click-to-quote task text extraction', () => {
     // Mirrors the extraction logic in updateTodoDisplay's li click handler in
     // index.html. The li structure at click time is:
